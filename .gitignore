@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.memnant/
+*.db
+*.db-journal
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+build/bin/
+build/bundle/
+
+# Private methodology docs — live locally + in the private memnant-docs repo, never published
+docs/
+CLAUDE.md
+.claude/
