@@ -6,10 +6,11 @@
  */
 
 import { join, resolve } from 'path';
-import { mkdirSync, existsSync } from 'fs';
+import { mkdirSync, existsSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
 
 const ROOT = resolve(import.meta.dir, '..');
+const PKG_VERSION: string = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')).version;
 const STUB_DIR = join(ROOT, 'build');
 const OUT_DIR = join(ROOT, 'build', 'bin');
 
@@ -65,6 +66,8 @@ async function buildAll() {
     target: 'bun',
     packages: 'bundle',
     plugins: [stubPlugin],
+    // Binaries have no package.json on disk ($bunfs) — embed the version.
+    define: { __MEMNANT_VERSION__: JSON.stringify(PKG_VERSION) },
   });
 
   if (!bundleResult.success) {
