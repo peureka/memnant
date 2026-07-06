@@ -2,15 +2,18 @@
  * Compiled-binary smoke test.
  *
  * The bun-compiled binaries shipped broken for four months without anyone
- * noticing: src/version.ts read ../package.json from disk at import time,
- * which doesn't exist inside bun's virtual bundle filesystem ($bunfs), so
- * every binary crashed at startup. No test ever executed a compiled binary.
- * This one does. Skipped when bun isn't installed.
+ * noticing — first a package.json read at startup, then the SQLite WASM
+ * loaded from a path baked in at build time. Both bugs are invisible when
+ * the binary runs on the machine that built it (the baked paths exist
+ * there), so this test compiles from a throwaway copy of the repo and
+ * deletes it before executing the binary: every baked path is then dead,
+ * exactly like a user's machine. Skipped when bun isn't installed.
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync, execSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdtempSync, rmSync, copyFileSync, chmodSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 
 const ROOT = join(import.meta.dirname, '..');
 
@@ -29,27 +32,58 @@ function findBun(): string | null {
 const bun = findBun();
 
 describe.skipIf(!bun)('compiled binary', () => {
-  it('starts up and reports the package version', () => {
+  it('runs on a machine that is not the build machine', () => {
     const pkgVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')).version;
 
-    // Build dist, then compile only the host-platform binary.
+    // Build dist in the real repo first, then clone the whole tree.
     const build = spawnSync('npx', ['tsc'], { cwd: ROOT, encoding: 'utf-8', timeout: 120_000 });
     expect(build.status).toBe(0);
 
+    const buildRoot = mkdtempSync(join(tmpdir(), 'memnant-binary-build-'));
+    const workDir = join(buildRoot, 'repo');
+    // -c uses APFS clonefile (instant); falls back to a normal copy elsewhere.
+    let cp = spawnSync('cp', ['-Rc', `${ROOT}/`, workDir], { encoding: 'utf-8', timeout: 300_000 });
+    if (cp.status !== 0) {
+      cp = spawnSync('cp', ['-R', `${ROOT}/`, workDir], { encoding: 'utf-8', timeout: 300_000 });
+    }
+    expect(cp.status).toBe(0);
+
     const hostTarget = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
-    const compile = spawnSync(bun as string, ['run', 'build/compile.ts', hostTarget], {
-      cwd: ROOT,
-      encoding: 'utf-8',
-      timeout: 300_000,
-    });
-    expect(compile.status).toBe(0);
+    const binaryName = `memnant-${hostTarget}`;
+    const binary = join(buildRoot, binaryName);
 
-    const binary = join(ROOT, 'build', 'bin', `memnant-${hostTarget}`);
-    expect(existsSync(binary)).toBe(true);
+    try {
+      const compile = spawnSync(bun as string, ['run', 'build/compile.ts', hostTarget], {
+        cwd: workDir,
+        encoding: 'utf-8',
+        timeout: 300_000,
+      });
+      expect(compile.status).toBe(0);
 
-    const run = spawnSync(binary, ['--version'], { encoding: 'utf-8', timeout: 60_000 });
-    expect(run.stderr).not.toContain('ENOENT');
-    expect(run.status).toBe(0);
-    expect(run.stdout.trim()).toContain(pkgVersion);
-  }, 400_000);
+      // Move the binary out, then delete the tree it was built from —
+      // every path baked into the binary now points at nothing.
+      copyFileSync(join(workDir, 'build', 'bin', binaryName), binary);
+      chmodSync(binary, 0o755);
+      rmSync(workDir, { recursive: true, force: true });
+
+      const version = spawnSync(binary, ['--version'], { encoding: 'utf-8', timeout: 60_000 });
+      expect(version.stderr).not.toContain('ENOENT');
+      expect(version.status).toBe(0);
+      expect(version.stdout.trim()).toContain(pkgVersion);
+
+      // init exercises SQLite — the WASM must be embedded, not read from disk.
+      const projectDir = join(buildRoot, 'project');
+      spawnSync('mkdir', ['-p', projectDir]);
+      const init = spawnSync(binary, ['init'], {
+        cwd: projectDir,
+        encoding: 'utf-8',
+        timeout: 120_000,
+      });
+      expect(init.stderr).not.toContain('ENOENT');
+      expect(init.status).toBe(0);
+      expect(existsSync(join(projectDir, '.memnant', 'ledger.db'))).toBe(true);
+    } finally {
+      rmSync(buildRoot, { recursive: true, force: true });
+    }
+  }, 600_000);
 });

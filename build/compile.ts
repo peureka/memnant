@@ -34,6 +34,21 @@ const stubPlugin = {
       path: join(STUB_DIR, 'sharp-stub.js'),
       namespace: 'file',
     }));
+    // Embed the SQLite WASM. Emscripten resolves the .wasm relative to a
+    // __dirname baked in at bundle time, which only exists on the build
+    // machine — every binary crashed with ENOENT anywhere else. Its
+    // bootstrap is `var Module = typeof Module != "undefined" ? Module : {}`
+    // and getBinarySync() short-circuits on Module.wasmBinary, so a
+    // prepended Module with the bytes inlined wins without patching the
+    // package itself.
+    build.onLoad({ filter: /node-sqlite3-wasm[\/\\]dist[\/\\]node-sqlite3-wasm\.js$/ }, async (args: any) => {
+      const src = await Bun.file(args.path).text();
+      const wasmB64 = readFileSync(
+        join(ROOT, 'node_modules', 'node-sqlite3-wasm', 'dist', 'node-sqlite3-wasm.wasm'),
+      ).toString('base64');
+      const header = `var Module = { wasmBinary: Buffer.from(${JSON.stringify(wasmB64)}, "base64") };\n`;
+      return { contents: header + src, loader: 'js' };
+    });
   },
 };
 
