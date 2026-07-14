@@ -266,4 +266,15 @@ describe('memnant init — auto MCP registration', () => {
     const content = readFileSync(claudeMd, 'utf-8');
     expect(content).toContain('# memnant');
   });
+
+  it('stamps CLAUDE.md with the project name after init, not "not initialised"', () => {
+    writeFileSync(join(fakeHome, '.claude.json'), '{}', 'utf-8');
+
+    runMemnant(['init', '--non-interactive'], testDir, { HOME: fakeHome });
+
+    const content = readFileSync(join(testDir, 'CLAUDE.md'), 'utf-8');
+    const projectName = testDir.split('/').pop();
+    expect(content).toContain(`Project: ${projectName} (ledger: .memnant/ledger.db)`);
+    expect(content).not.toContain('not initialised');
+  });
 });

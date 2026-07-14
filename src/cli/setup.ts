@@ -10,6 +10,18 @@ import { join } from 'path';
 import { homedir } from 'os';
 import * as TOML from 'smol-toml';
 import { claudeCodeInstructions } from './instructions.js';
+import { loadConfig, findProjectRoot } from '../config/load.js';
+
+function getProjectInfo(): { name: string; dbPath: string } | null {
+  const projectRoot = findProjectRoot(process.cwd());
+  if (!projectRoot) return null;
+  try {
+    const config = loadConfig(projectRoot);
+    return { name: config.project.name, dbPath: config.memory.db_path };
+  } catch {
+    return null;
+  }
+}
 
 function getMcpServerConfig(): { command: string; args: string[] } {
   return {
@@ -28,7 +40,7 @@ function warnIfNotInitialised(): void {
 export function injectClaudeMdInstructions(): void {
   const cwd = process.cwd();
   const claudeMdPath = join(cwd, 'CLAUDE.md');
-  const instructions = claudeCodeInstructions(null);
+  const instructions = claudeCodeInstructions(getProjectInfo());
 
   if (existsSync(claudeMdPath)) {
     const existing = readFileSync(claudeMdPath, 'utf-8');
