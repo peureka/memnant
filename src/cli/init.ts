@@ -210,6 +210,55 @@ async function nonInteractiveInit(cwd: string, opts: { withSpecs?: boolean }): P
   }
 }
 
+/**
+ * Recreate a missing ledger for a project that already has memnant.yaml but no
+ * .memnant/ledger.db (e.g. a fresh git worktree — the ledger is gitignored).
+ *
+ * Reuses the existing config's project id, name, and db_path. Never
+ * regenerates the project id and never rewrites memnant.yaml.
+ */
+async function repairLedger(cwd: string, configPath: string): Promise<void> {
+  const { createDatabase } = await import('../ledger/database.js');
+
+  const config = yaml.load(readFileSync(configPath, 'utf-8')) as any;
+  const projectId = config.project.id;
+  const projectName = config.project.name;
+  const dbRelPath = config.memory?.db_path ?? '.memnant/ledger.db';
+  const dbPath = join(cwd, dbRelPath);
+
+  let db;
+  try {
+    db = createDatabase(dbPath);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not recreate database at ${dbRelPath}: ${msg}`);
+  }
+
+  try {
+    db.run(
+      'INSERT INTO project (id, name, root_path, created_at) VALUES (?, ?, ?, ?)',
+      [projectId, projectName, cwd, new Date().toISOString()],
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not write project record to recreated database: ${msg}`);
+  } finally {
+    db.close();
+  }
+
+  // Re-register in machine-local registry (best-effort).
+  try {
+    const { loadRegistry, addProject, saveRegistry } = await import('../registry/registry.js');
+    const reg = loadRegistry();
+    addProject(reg, { id: projectId, name: projectName, root_path: cwd });
+    saveRegistry(undefined, reg);
+  } catch {
+    // Registry is optional — don't fail repair.
+  }
+
+  console.log(`Repaired: recreated ${dbRelPath} for project "${projectName}" (project id preserved).`);
+}
+
 function getGitUserName(cwd: string): string | null {
   try {
     return execFileSync('git', ['config', 'user.name'], { cwd, encoding: 'utf-8' }).trim() || null;
@@ -262,8 +311,25 @@ export function registerInitCommand(program: Command): void {
       const cwd = process.cwd();
       const configPath = join(cwd, 'memnant.yaml');
 
+      // Already-initialised project: memnant.yaml exists. Base init is skipped,
+      // but two recovery paths remain reachable — ledger repair (config present,
+      // ledger missing) and team-mode configuration (--team).
       if (existsSync(configPath)) {
-        console.log('memnant is already initialised in this project.');
+        const config = yaml.load(readFileSync(configPath, 'utf-8')) as any;
+        const dbRelPath = config.memory?.db_path ?? '.memnant/ledger.db';
+        const ledgerExists = existsSync(join(cwd, dbRelPath));
+
+        if (!ledgerExists) {
+          await repairLedger(cwd, configPath);
+        }
+
+        if (opts.team) {
+          await configureTeamMode(cwd, configPath);
+        } else if (ledgerExists) {
+          console.log(
+            'memnant is already initialised in this project. Run `memnant init --team` to configure team mode.',
+          );
+        }
         return;
       }
 

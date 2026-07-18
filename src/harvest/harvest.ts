@@ -85,6 +85,9 @@ async function extractCandidates(
  * - `options.transcriptProjectRoot`, when given, derives the transcript slug
  *   dir from that path instead of `projectRoot` — used by a coordinator to
  *   harvest a worktree's transcripts into the main checkout's ledger.
+ * - `options.transcriptDir`, when given, is used AS the transcript directory
+ *   directly (no slug derivation) — for orphaned Claude Code transcript dirs
+ *   that outlive a deleted worktree. Takes precedence over transcriptProjectRoot.
  *
  * A watermark (`.memnant/harvest-state.json`) skips unchanged files entirely
  * (zero parsing/embedding) and parses only appended content from grown files.
@@ -94,10 +97,10 @@ export async function harvest(
   db: any,
   projectRoot: string,
   projectId: string,
-  options?: { tierConfig?: any; transcriptProjectRoot?: string },
+  options?: { tierConfig?: any; transcriptProjectRoot?: string; transcriptDir?: string },
 ): Promise<HarvestResult> {
-  const transcriptRoot = options?.transcriptProjectRoot ?? projectRoot;
-  const transcriptDir = getTranscriptDir(transcriptRoot);
+  const transcriptDir =
+    options?.transcriptDir ?? getTranscriptDir(options?.transcriptProjectRoot ?? projectRoot);
   const files = findTranscriptsByMtime(transcriptDir);
 
   if (files.length === 0) {

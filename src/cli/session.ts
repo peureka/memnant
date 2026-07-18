@@ -148,7 +148,7 @@ export function registerSessionCommand(program: Command): void {
       const { insertRecord } = await import('../ledger/records.js');
       const { generateEmbedding, serializeEmbedding } = await import('../vector/embeddings.js');
 
-      const { config, dbPath } = await loadProjectConfig();
+      const { config, dbPath, projectRoot } = await loadProjectConfig();
       const db = openDatabase(dbPath);
 
       try {
@@ -204,6 +204,33 @@ export function registerSessionCommand(program: Command): void {
         });
 
         closeSession(db, active.id, record.id);
+
+        // Team export parity with MCP session_close: ship this session's
+        // shareable records into .memnant/shared/ so subagents without MCP
+        // access still contribute to PRs. Only in team mode (builder set).
+        const builder = (config.project as any).builder;
+        if (builder) {
+          try {
+            const { exportSharedRecords } = await import('../team/sync.js');
+            const sharedDir = join(projectRoot, '.memnant', 'shared');
+            const exportCount = exportSharedRecords(
+              db,
+              active.id,
+              config.project.id,
+              sharedDir,
+              builder,
+              config.project.name,
+            );
+            if (exportCount > 0) {
+              process.stderr.write(
+                `team sync: exported ${exportCount} record${exportCount > 1 ? 's' : ''} to .memnant/shared/\n`,
+              );
+            }
+          } catch (err) {
+            process.stderr.write(`team sync export failed (non-blocking): ${err}\n`);
+          }
+        }
+
         printCloseSummary(getSessionRecordCounts, db, active);
       } finally {
         db.close();
