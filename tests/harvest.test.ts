@@ -107,6 +107,29 @@ describe('transcript parser', () => {
     expect(messages[0].text).not.toContain('Read');
   });
 
+  it('extracts text from array-form user message content', async () => {
+    const transcript = join(testDir, 'user-array.jsonl');
+    const lines = [
+      JSON.stringify({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 't1', content: 'file contents here' },
+            { type: 'text', text: "Let's go with Deno for the edge runtime." },
+          ],
+        },
+      }),
+    ];
+    writeFileSync(transcript, lines.join('\n'));
+
+    const messages = await parseTranscript(transcript);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].role).toBe('user');
+    expect(messages[0].text).toContain('Deno');
+    expect(messages[0].text).not.toContain('file contents here');
+  });
+
   it('skips thinking blocks', async () => {
     const transcript = join(testDir, 'test3.jsonl');
     const lines = [
