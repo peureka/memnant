@@ -35,10 +35,6 @@ describe.skipIf(!bun)('compiled binary', () => {
   it('runs on a machine that is not the build machine', () => {
     const pkgVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')).version;
 
-    // Build dist in the real repo first, then clone the whole tree.
-    const build = spawnSync('npx', ['tsc'], { cwd: ROOT, encoding: 'utf-8', timeout: 120_000 });
-    expect(build.status).toBe(0);
-
     const buildRoot = mkdtempSync(join(tmpdir(), 'memnant-binary-build-'));
     const workDir = join(buildRoot, 'repo');
     // -c uses APFS clonefile (instant); falls back to a normal copy elsewhere.
@@ -47,6 +43,12 @@ describe.skipIf(!bun)('compiled binary', () => {
       cp = spawnSync('cp', ['-R', `${ROOT}/`, workDir], { encoding: 'utf-8', timeout: 300_000 });
     }
     expect(cp.status).toBe(0);
+
+    // Build dist inside the throwaway copy, never the real repo: rewriting the
+    // real dist/ mid-suite races every test that spawns `node dist/cli/index.js`
+    // (transient "does not provide an export" crashes at full parallelism).
+    const build = spawnSync('npx', ['tsc'], { cwd: workDir, encoding: 'utf-8', timeout: 120_000 });
+    expect(build.status).toBe(0);
 
     const hostTarget = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
     const binaryName = `memnant-${hostTarget}`;
