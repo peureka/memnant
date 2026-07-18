@@ -71,6 +71,65 @@ function slugify(text: string): string {
   return slug || 'session';
 }
 
+/** Inline section markers used by legacy single-line summaries. */
+const INLINE_MARKERS = 'Shipped|Decisions|Rejected|Gotchas|TODOs|Deferred|Next';
+
+/**
+ * True if `summary` is a legacy single-line paragraph carrying inline section
+ * markers ("Shipped: … Decisions: … TODOs: … Next: …"). Multi-line summaries
+ * (markers on their own lines) are left to the line-based parsing below.
+ */
+function hasInlineMarkers(summary: string): boolean {
+  const trimmed = summary.trim();
+  if (trimmed.includes('\n')) return false;
+  return new RegExp(`\\b(?:${INLINE_MARKERS}):`, 'i').test(trimmed);
+}
+
+/**
+ * Split a single-line inline-marker summary into the text before the first
+ * marker (`pre`, the Goal source) and a map of marker name → segment text.
+ */
+function parseInlineSegments(line: string): { pre: string; segments: Map<string, string> } {
+  const markerRe = new RegExp(`\\b(${INLINE_MARKERS}):`, 'gi');
+  const matches = [...line.matchAll(markerRe)];
+  const segments = new Map<string, string>();
+  if (matches.length === 0) return { pre: line.trim(), segments };
+
+  const pre = line.slice(0, matches[0].index).trim();
+  for (let i = 0; i < matches.length; i++) {
+    const name = matches[i][1].toLowerCase();
+    const start = (matches[i].index as number) + matches[i][0].length;
+    const end = i + 1 < matches.length ? (matches[i + 1].index as number) : line.length;
+    segments.set(name, line.slice(start, end).trim());
+  }
+  return { pre, segments };
+}
+
+/** Fields recognised in templated decision and framework_fix record content. */
+const DECISION_FIELDS = ['Question', 'Context', 'Decision', 'Rationale'];
+const FIX_FIELDS = ['Problem', 'Context', 'Solution'];
+
+/**
+ * Extract a single template field's value from record content, bounded by the
+ * next known field label (or end of text). Returns null when the field is
+ * absent — callers then fall back to `firstSentence` of the whole content.
+ */
+function extractField(content: string, field: string, allFields: string[]): string | null {
+  const flat = content.replace(/\s+/g, ' ').trim();
+  const start = flat.match(new RegExp(`\\b${field}:\\s*`, 'i'));
+  if (!start || start.index === undefined) return null;
+
+  const rest = flat.slice(start.index + start[0].length);
+  let end = rest.length;
+  for (const other of allFields) {
+    if (other.toLowerCase() === field.toLowerCase()) continue;
+    const m = rest.match(new RegExp(`\\b${other}:`, 'i'));
+    if (m && m.index !== undefined && m.index < end) end = m.index;
+  }
+  const value = rest.slice(0, end).trim();
+  return value || null;
+}
+
 /** True if a line looks like a section heading (e.g. "TODOs:", "## Next"). */
 function isHeading(line: string): boolean {
   const s = line.replace(/^#+\s*/, '').trim();
@@ -100,6 +159,20 @@ function splitBullets(text: string): string[] {
   }
   if (bullets.length === 0 && text.trim()) return [text.trim()];
   return bullets;
+}
+
+/**
+ * Done bullets for one session_log record. Inline-marker logs contribute only
+ * their "Shipped:" segment (split on "; "); everything else uses splitBullets.
+ */
+function logToDoneBullets(content: string): string[] {
+  if (hasInlineMarkers(content)) {
+    const shipped = parseInlineSegments(content.trim()).segments.get('shipped');
+    if (!shipped) return [];
+    const parts = shipped.split('; ').map((s) => s.trim()).filter(Boolean);
+    return parts.length > 0 ? parts : [shipped];
+  }
+  return splitBullets(content);
 }
 
 /** Lines under a "TODOs:" or "Deferred:" heading, until the next heading/blank. */
@@ -220,13 +293,20 @@ function renderMarkdown(params: {
 
   parts.push(`# ${date} — ${projectName} — ${slug}`);
 
-  const goal = firstLine(summary);
+  // Inline-marker summaries (legacy single-line paragraphs) parse from segments;
+  // multi-line summaries keep the line-based parsing.
+  const inline = hasInlineMarkers(summary);
+  const inlineSegments = inline ? parseInlineSegments(summary.trim()).segments : null;
+
+  const goal = inline
+    ? firstSentence(parseInlineSegments(summary.trim()).pre)
+    : firstLine(summary);
   if (goal) parts.push(`**Goal**: ${goal}`);
 
   // Done: every session_log record content, split into bullets.
   const doneBullets: string[] = [];
   for (const log of sessionLogs) {
-    doneBullets.push(...splitBullets(log.content_text));
+    doneBullets.push(...logToDoneBullets(log.content_text));
   }
   if (doneBullets.length > 0) {
     parts.push(['**Done**:', ...doneBullets.map((b) => `- ${b}`)].join('\n'));
@@ -236,22 +316,34 @@ function renderMarkdown(params: {
     const bullets = decisions.map((d) => {
       const tags = (JSON.parse(d.tags) as string[]) ?? [];
       const rejected = tags.includes('rejected') ? ' [rejected]' : '';
-      return `- ${firstSentence(d.content_text)}${rejected}`;
+      const field = extractField(d.content_text, 'Decision', DECISION_FIELDS);
+      const body = field ? firstSentence(field) : firstSentence(d.content_text);
+      return `- ${body}${rejected}`;
     });
     parts.push(['**Decisions**:', ...bullets].join('\n'));
   }
 
   if (fixes.length > 0) {
-    const bullets = fixes.map((f) => `- ${firstSentence(f.content_text)}`);
+    const bullets = fixes.map((f) => {
+      const field = extractField(f.content_text, 'Solution', FIX_FIELDS);
+      const body = field ? firstSentence(field) : firstSentence(f.content_text);
+      return `- ${body}`;
+    });
     parts.push(['**Framework fixes**:', ...bullets].join('\n'));
   }
 
-  const deferred = parseDeferred(summary);
+  let deferred: string[];
+  if (inline) {
+    const raw = inlineSegments!.get('todos') ?? inlineSegments!.get('deferred');
+    deferred = raw ? raw.split(/;\s*/).map((d) => d.trim()).filter(Boolean) : [];
+  } else {
+    deferred = parseDeferred(summary);
+  }
   if (deferred.length > 0) {
     parts.push(['**Deferred to backlog**:', ...deferred.map((d) => `- ${d}`)].join('\n'));
   }
 
-  const next = parseNext(summary);
+  const next = inline ? inlineSegments!.get('next')?.trim() || null : parseNext(summary);
   if (next) parts.push(`**Next**: ${next}`);
 
   return parts.join('\n\n') + '\n';
