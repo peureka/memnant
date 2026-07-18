@@ -4,15 +4,39 @@
  * Story 12.2: Read .git/HEAD to detect current branch, fuzzy match to epic.
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, statSync } from 'fs';
+import { isAbsolute, join } from 'path';
 
 /**
  * Detect the current git branch from .git/HEAD.
  * Returns null if not in a git repo or HEAD is detached.
+ *
+ * Handles git worktrees, where `<projectRoot>/.git` is a FILE containing
+ * `gitdir: <path>` pointing at `<main>/.git/worktrees/<name>`; HEAD lives
+ * inside that pointed-to directory. Pure-fs, no child processes — this runs
+ * on every context compile.
  */
 export function detectBranch(projectRoot: string): string | null {
-  const headPath = join(projectRoot, '.git', 'HEAD');
+  const gitPath = join(projectRoot, '.git');
+  if (!existsSync(gitPath)) return null;
+
+  let gitDir: string;
+  try {
+    if (statSync(gitPath).isDirectory()) {
+      gitDir = gitPath;
+    } else {
+      // Worktree: .git is a file `gitdir: <abs-or-relative-path>`
+      const pointer = readFileSync(gitPath, 'utf-8').trim();
+      const gitdirMatch = pointer.match(/^gitdir:\s*(.+)$/m);
+      if (!gitdirMatch) return null;
+      const target = gitdirMatch[1].trim();
+      gitDir = isAbsolute(target) ? target : join(projectRoot, target);
+    }
+  } catch {
+    return null;
+  }
+
+  const headPath = join(gitDir, 'HEAD');
   if (!existsSync(headPath)) return null;
 
   const content = readFileSync(headPath, 'utf-8').trim();

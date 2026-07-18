@@ -9,9 +9,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { join, relative } from 'path';
 import { tmpdir } from 'os';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync, realpathSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { createDatabase, type Database } from '../src/ledger/database.js';
 import { insertRecord } from '../src/ledger/records.js';
 import { generateEmbedding, serializeEmbedding } from '../src/vector/embeddings.js';
@@ -96,6 +97,69 @@ describe('Story 12.2: Branch-aware context', () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'memnant-branch-'));
     expect(autoDetectEpic(tmpDir)).toBeNull();
     await rm(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('detectBranch — git worktree support', () => {
+  let baseDir: string;
+
+  beforeEach(async () => {
+    baseDir = realpathSync(await mkdtemp(join(tmpdir(), 'memnant-worktree-')));
+  });
+
+  afterEach(async () => {
+    await rm(baseDir, { recursive: true, force: true });
+  });
+
+  function git(args: string[], cwd: string): void {
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf-8',
+      env: {
+        ...process.env,
+        HOME: baseDir,
+        GIT_CONFIG_GLOBAL: join(baseDir, '.gitconfig'),
+        GIT_CONFIG_SYSTEM: '/dev/null',
+      },
+    });
+  }
+
+  function makeRepoWithWorktree(): { mainRepo: string; worktree: string } {
+    const mainRepo = join(baseDir, 'main');
+    mkdirSync(mainRepo, { recursive: true });
+    git(['init', '-q'], mainRepo);
+    git(['config', 'user.email', 'test@example.com'], mainRepo);
+    git(['config', 'user.name', 'Test'], mainRepo);
+    git(['commit', '-q', '--allow-empty', '-m', 'init'], mainRepo);
+    git(['branch', 'epic-12'], mainRepo);
+    const worktree = join(baseDir, 'wt');
+    git(['worktree', 'add', '-q', worktree, 'epic-12'], mainRepo);
+    return { mainRepo, worktree };
+  }
+
+  it('returns the branch name inside a git worktree (absolute gitdir path)', () => {
+    const { worktree } = makeRepoWithWorktree();
+    expect(detectBranch(worktree)).toBe('epic-12');
+  });
+
+  it('returns the branch name inside a worktree whose .git file uses a relative gitdir path', () => {
+    const { mainRepo, worktree } = makeRepoWithWorktree();
+    const relGitdir = relative(worktree, join(mainRepo, '.git', 'worktrees', 'wt'));
+    writeFileSync(join(worktree, '.git'), `gitdir: ${relGitdir}\n`, 'utf-8');
+    expect(detectBranch(worktree)).toBe('epic-12');
+  });
+
+  it('returns null for a garbled .git file without throwing', () => {
+    const dir = join(baseDir, 'garbled');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.git'), 'this is not a valid gitdir pointer\n', 'utf-8');
+    expect(detectBranch(dir)).toBeNull();
+  });
+
+  it('regular (non-worktree) repo behaviour is unchanged', () => {
+    const { mainRepo } = makeRepoWithWorktree();
+    const branch = detectBranch(mainRepo);
+    expect(branch === 'master' || branch === 'main').toBe(true);
   });
 });
 
