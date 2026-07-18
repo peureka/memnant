@@ -25,6 +25,25 @@ export function findTranscripts(dir: string): string[] {
   }
 }
 
+export interface TranscriptFile {
+  path: string;
+  mtimeMs: number;
+  size: number;
+}
+
+/**
+ * All .jsonl transcripts in a slug dir (main sessions + agent-*.jsonl),
+ * sorted by modification time, oldest first.
+ */
+export function findTranscriptsByMtime(dir: string): TranscriptFile[] {
+  return findTranscripts(dir)
+    .map((path) => {
+      const s = statSync(path);
+      return { path, mtimeMs: s.mtimeMs, size: s.size };
+    })
+    .sort((a, b) => a.mtimeMs - b.mtimeMs);
+}
+
 export function findLatestTranscript(dir: string): string | null {
   const transcripts = findTranscripts(dir);
   if (transcripts.length === 0) return null;

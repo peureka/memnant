@@ -5,13 +5,14 @@
 
 import { Command } from 'commander';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 export function registerHarvestCommand(program: Command): void {
   program
     .command('harvest')
-    .description('Scan latest conversation transcript and extract missed records')
-    .action(async () => {
+    .description('Scan conversation transcripts and extract missed records')
+    .option('--project-root <path>', 'Harvest transcripts from this project path instead of the current directory (records still land in the current project ledger)')
+    .action(async (options: { projectRoot?: string }) => {
       const { openDatabase } = await import('../ledger/database.js');
       const { loadConfig, ConfigError, findProjectRoot } = await import('../config/load.js');
 
@@ -20,6 +21,15 @@ export function registerHarvestCommand(program: Command): void {
       if (!projectRoot) {
         console.error('No memnant project found in this or any parent directory. Run `memnant init` first.');
         process.exit(1);
+      }
+
+      let transcriptProjectRoot: string | undefined;
+      if (options.projectRoot) {
+        transcriptProjectRoot = resolve(options.projectRoot);
+        if (!existsSync(transcriptProjectRoot)) {
+          console.error(`--project-root path does not exist: ${transcriptProjectRoot}`);
+          process.exit(1);
+        }
       }
 
       let config;
@@ -46,7 +56,7 @@ export function registerHarvestCommand(program: Command): void {
       } catch (e: any) { console.error('harvest entry failed:', e?.message); }
 
       const { harvest } = await import('../harvest/harvest.js');
-      const result = await harvest(db, projectRoot, config.project.id, { tierConfig });
+      const result = await harvest(db, projectRoot, config.project.id, { tierConfig, transcriptProjectRoot });
       db.close();
 
       if (!result.transcriptPath) {
