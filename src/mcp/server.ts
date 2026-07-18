@@ -54,15 +54,82 @@ function log(message: string): void {
   process.stderr.write(`[${new Date().toISOString()}] ${message}\n`);
 }
 
+/**
+ * All MCP tool names exposed by the server. Used by detached mode to register
+ * placeholders that return a helpful error until a project is initialised.
+ */
+const TOOL_NAMES = [
+  'memnant_recall',
+  'memnant_history',
+  'memnant_log',
+  'memnant_status',
+  'memnant_session_context',
+  'memnant_check_copy',
+  'memnant_check_design',
+  'memnant_synthesise',
+  'memnant_context_for_file',
+  'memnant_project_brief',
+  'memnant_stats',
+  'memnant_reindex',
+  'memnant_harvest_memory',
+  'memnant_replay',
+  'memnant_spec_diff',
+  'memnant_eval_persona',
+  'memnant_federated_recall',
+  'memnant_costs',
+  'memnant_retract',
+  'memnant_session_log',
+  'memnant_session_close',
+  'memnant_analytics',
+] as const;
+
+/**
+ * Start the server in "detached" mode: the MCP handshake completes and all
+ * tools are registered, but every tool call returns a helpful error because no
+ * memnant project could be resolved. This keeps `memnant serve` alive when it
+ * is spawned (via user-scope MCP registration) from a non-project directory,
+ * instead of exiting and surfacing "Failed to connect" in the client.
+ */
+async function startDetachedServer(cwd: string): Promise<void> {
+  const message =
+    `No memnant project found in ${cwd} or any parent directory. Run \`memnant init\` first.`;
+
+  const server = new McpServer({ name: 'memnant', version: VERSION });
+
+  for (const name of TOOL_NAMES) {
+    server.registerTool(
+      name,
+      { description: 'memnant tool — no project resolved (run `memnant init` first)' },
+      async () => ({
+        content: [{ type: 'text' as const, text: message }],
+        isError: true,
+      }),
+    );
+  }
+
+  const cleanup = () => {
+    server.close();
+    process.exit(0);
+  };
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  log(`memnant MCP server started in detached mode (no project at ${cwd})`);
+}
+
 export async function startServer(): Promise<void> {
   const cwd = process.cwd();
 
   // Walk up to find the nearest memnant project
   const projectRoot = findProjectRoot(cwd);
 
+  // No project in scope: idle gracefully rather than exiting, so a user-scope
+  // MCP registration spawned from a non-project dir still connects.
   if (!projectRoot) {
-    process.stderr.write('No memnant project found in this or any parent directory. Run `memnant init` first.\n');
-    process.exit(1);
+    await startDetachedServer(cwd);
+    return;
   }
 
   let config: ProjectConfig;
@@ -84,8 +151,8 @@ export async function startServer(): Promise<void> {
   const dbPath = join(projectRoot, config.memory.db_path);
 
   if (!existsSync(dbPath)) {
-    process.stderr.write('No memnant project found. Run `memnant init` first.\n');
-    process.exit(1);
+    await startDetachedServer(cwd);
+    return;
   }
 
   const db = openDatabase(dbPath);

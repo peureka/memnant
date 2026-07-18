@@ -306,4 +306,163 @@ describe('memnant export-session', { timeout: 180_000 }, () => {
 
     await rm(dir, { recursive: true, force: true });
   });
+
+  // ── Inline-heading (legacy single-line) summaries ──────────────────────
+  //
+  // Legacy session logs written as ONE long line with inline markers
+  // ("Shipped: … Decisions: … TODOs: … Next: …") must be split into segments
+  // at those markers, instead of dumping the whole line into Goal + Done.
+
+  /** Return the "**Heading**: …" block for a heading, or '' if absent. */
+  function sectionBlock(md: string, heading: string): string {
+    return md.split('\n\n').find((b) => b.startsWith(`**${heading}**`)) ?? '';
+  }
+
+  const INLINE_LOG =
+    'Fixed the exporter and serve idle. ' +
+    'Shipped: parse inline markers; render Decision field. ' +
+    'Decisions: chose detached mode over lazy resolution. ' +
+    'Rejected: full per-call resolution. ' +
+    'Gotchas: zsh globs abort compound commands. ' +
+    'TODOs: add colony dedup; profile slow tests. ' +
+    'Next: wire the PR gates.';
+
+  // Test 1 (item 1a): Goal = first sentence of pre-marker text only
+  it('inline-marker summary: Goal is the first sentence of the pre-marker text only', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-inline-goal-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, { log: INLINE_LOG });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('**Goal**: Fixed the exporter and serve idle.');
+    // The whole paragraph must NOT leak into Goal.
+    expect(md).not.toContain('**Goal**: Fixed the exporter and serve idle. Shipped:');
+    expect(sectionBlock(md, 'Goal')).not.toContain('Shipped:');
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // Test 2 (item 1a): Done = Shipped bullets; no Decisions/Rejected/Gotchas/TODOs/Next text
+  it('inline-marker summary: Done is the Shipped segment split on "; " and nothing else', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-inline-done-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, { log: INLINE_LOG });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    const done = sectionBlock(md, 'Done');
+    expect(done).toContain('- parse inline markers');
+    expect(done).toContain('- render Decision field');
+    // No text from the other inline segments leaks into Done.
+    expect(done).not.toContain('chose detached mode');
+    expect(done).not.toContain('full per-call resolution');
+    expect(done).not.toContain('zsh globs abort');
+    expect(done).not.toContain('add colony dedup');
+    expect(done).not.toContain('wire the PR gates');
+    // Decisions/Rejected/Gotchas segments are dropped entirely (no records here).
+    expect(md).not.toContain('chose detached mode');
+    expect(md).not.toContain('full per-call resolution');
+    expect(md).not.toContain('zsh globs abort');
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // Test 3 (item 1a): Deferred = TODOs items; Next = Next segment
+  it('inline-marker summary: Deferred is the TODOs items and Next is the Next segment', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-inline-tail-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, { log: INLINE_LOG });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    const deferred = sectionBlock(md, 'Deferred to backlog');
+    expect(deferred).toContain('- add colony dedup');
+    expect(deferred).toContain('- profile slow tests');
+
+    expect(md).toContain('**Next**: wire the PR gates.');
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // Test 4 (item 1a regression): multi-line structured summaries render as today
+  it('multi-line structured summary keeps today\'s line-based rendering', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-multiline-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, { log: SESSION_A_LOG });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('**Goal**: Set up the analytics dashboard skeleton.');
+    expect(sectionBlock(md, 'Done')).toContain('- Wired the metrics API route.');
+    expect(sectionBlock(md, 'Deferred to backlog')).toContain('- Add auth to the metrics API');
+    expect(md).toContain('**Next**: wire the charts to live data');
+    // TODOs marker line is not duplicated as a Done bullet.
+    expect(md).not.toContain('- TODOs:');
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // ── Templated record rendering (item 1b) ───────────────────────────────
+
+  // Test 5: templated decision renders the Decision field, not the Question field
+  it('templated decision renders the Decision field first sentence; rejected suffix preserved', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-decision-tpl-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, {
+      decisions: [
+        {
+          content:
+            'Question: Should we adopt Redis? Context: A cache layer is needed. Decision: Rejected Redis in favour of an in-process LRU. Adds no ops overhead. Rationale: Operational simplicity for a solo builder.',
+          tags: 'cache,rejected',
+        },
+      ],
+      log: 'Reviewed the cache options.',
+    });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('- Rejected Redis in favour of an in-process LRU. [rejected]');
+    // Not the Question field, not the trailing sentence of the Decision field.
+    expect(md).not.toContain('Should we adopt Redis');
+    expect(md).not.toContain('Adds no ops overhead');
+
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // Test 6: templated framework_fix renders the Solution field; plain fixes unchanged
+  it('templated framework_fix renders the Solution field; fixes without fields are unchanged', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-fix-tpl-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, {
+      fixes: [
+        'Problem: The dashboard route served stale data. Solution: Set revalidate to 60 on the route. Verified in staging. Context: Next.js App Router.',
+        'Plain fix note: bump the node engine to 20 in package.json.',
+      ],
+      log: 'Fixed the caching and engine pin.',
+    });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    // Templated fix → Solution field first sentence.
+    expect(md).toContain('- Set revalidate to 60 on the route.');
+    expect(md).not.toContain('The dashboard route served stale data');
+    expect(md).not.toContain('Verified in staging');
+    // Plain fix without fields → first sentence unchanged.
+    expect(md).toContain('- Plain fix note: bump the node engine to 20 in package.json.');
+
+    await rm(dir, { recursive: true, force: true });
+  });
 });
