@@ -73,6 +73,63 @@ describe('harvest --project-root', () => {
   }, 60_000);
 });
 
+describe('harvest --transcript-dir', () => {
+  let mainDir: string;
+  let orphanDir: string;
+
+  beforeEach(() => {
+    mainDir = mkdtempSync(join(tmpdir(), 'memnant-harvest-td-main-'));
+    // A raw transcript dir that is NOT a slug of any live project path —
+    // simulates a Claude Code transcript dir outliving a deleted worktree.
+    orphanDir = mkdtempSync(join(tmpdir(), 'memnant-orphan-transcripts-'));
+    runMemnant(['init'], mainDir);
+  });
+
+  afterEach(() => {
+    rmSync(mainDir, { recursive: true, force: true });
+    rmSync(orphanDir, { recursive: true, force: true });
+  });
+
+  it('reads .jsonl from the given dir into the cwd ledger; watermark makes a second run a no-op', () => {
+    writeFileSync(
+      join(orphanDir, 'agent-orphan.jsonl'),
+      JSON.stringify({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: "Let's use Kafka for the event stream." }] },
+      }) + '\n',
+    );
+
+    const first = runMemnant(['harvest', '--transcript-dir', orphanDir], mainDir);
+    expect(first.status).toBe(0);
+    const match = first.stdout.match(/(\d+) new records/);
+    expect(match).not.toBeNull();
+    expect(Number(match![1])).toBeGreaterThanOrEqual(1);
+
+    const db = openDatabase(join(mainDir, '.memnant', 'ledger.db'));
+    const rows = db.all("SELECT content_text FROM record WHERE content_text LIKE '%Kafka%'");
+    db.close();
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+
+    // Second run: unchanged files skipped by the watermark → 0 new records.
+    const second = runMemnant(['harvest', '--transcript-dir', orphanDir], mainDir);
+    expect(second.status).toBe(0);
+    expect(second.stdout).toMatch(/0 new records/);
+  }, 180_000);
+
+  it('fails helpfully when --transcript-dir does not exist', () => {
+    const missing = join(orphanDir, 'gone');
+    const result = runMemnant(['harvest', '--transcript-dir', missing], mainDir);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('does not exist');
+  }, 60_000);
+
+  it('rejects --transcript-dir together with --project-root', () => {
+    const result = runMemnant(['harvest', '--transcript-dir', orphanDir, '--project-root', mainDir], mainDir);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr.toLowerCase()).toMatch(/cannot|both|together|mutually/);
+  }, 60_000);
+});
+
 describe('MCP session_context auto-harvest respects the watermark', () => {
   let projectDir: string;
 
