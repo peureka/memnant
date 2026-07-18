@@ -18,6 +18,7 @@ import { registerLogCommand } from './log.js';
 import { registerRecallCommand } from './recall.js';
 import { registerServeCommand } from './serve.js';
 import { registerExportCommand } from './export.js';
+import { registerExportSessionCommand } from './export-session.js';
 import { registerSessionCommand } from './session.js';
 import { registerSnapshotCommand } from './snapshot.js';
 import { registerCheckCopyCommand } from './check-copy.js';
@@ -76,6 +77,7 @@ Usage: npx memnant
 registerInitCommand(program);
 registerStatusCommand(program);
 registerExportCommand(program);
+registerExportSessionCommand(program);
 registerServeCommand(program);
 registerRetractCommand(program);
 registerArchiveCommand(program);
