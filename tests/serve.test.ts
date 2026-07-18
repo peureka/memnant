@@ -216,16 +216,45 @@ describe('memnant serve (MCP server)', { timeout: 120_000 }, () => {
     expect(true).toBe(true);
   });
 
-  // AC: Server exits with error when no project is initialised
-  it('exits with error when no project initialised', async () => {
+  // Serve graceful idle: server starts (handshake succeeds) even with no project.
+  it('starts and completes the MCP handshake when no project is present', async () => {
     const emptyDir = await mkdtemp(join(tmpdir(), 'memnant-noproject-'));
 
-    const result = runMemnant(['serve'], emptyDir, { timeout: 10_000 });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('No memnant project found');
-    expect(result.stderr).toContain('memnant init');
+    const conn = await createClient(emptyDir);
+    try {
+      // Handshake succeeded (connect resolved) — the server stayed up.
+      const listed = await conn.client.listTools();
+      const names = listed.tools.map((t) => t.name);
+      expect(names).toContain('memnant_status');
+    } finally {
+      await conn.client.close();
+      await rm(emptyDir, { recursive: true, force: true });
+    }
+  });
 
-    await rm(emptyDir, { recursive: true, force: true });
+  // Serve graceful idle: tool calls return a helpful error, server stays alive.
+  it('returns a helpful error per tool call when no project, and stays alive', async () => {
+    const emptyDir = await mkdtemp(join(tmpdir(), 'memnant-noproject-tool-'));
+
+    const conn = await createClient(emptyDir);
+    try {
+      const first = await conn.client.callTool({ name: 'memnant_status', arguments: {} });
+      expect(first.isError).toBe(true);
+      const firstContent = first.content as Array<{ type: string; text: string }>;
+      expect(firstContent[0].text).toContain('No memnant project found');
+      expect(firstContent[0].text).toContain('memnant init');
+      // Mentions the directory it looked from.
+      expect(firstContent[0].text).toContain(emptyDir);
+
+      // Server is still alive — a second call also resolves.
+      const second = await conn.client.callTool({ name: 'memnant_recall', arguments: { query: 'anything' } });
+      expect(second.isError).toBe(true);
+      const secondContent = second.content as Array<{ type: string; text: string }>;
+      expect(secondContent[0].text).toContain('No memnant project found');
+    } finally {
+      await conn.client.close();
+      await rm(emptyDir, { recursive: true, force: true });
+    }
   });
 
   // Story 2.3: memnant_session_context returns JSON with all expected sections
