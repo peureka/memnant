@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, readFileSync, realpathSync, writeFileSync, mkdirSync } from 'fs';
 import { mkdtemp, rm } from 'fs/promises';
-import { join } from 'path';
+import { isAbsolute, join } from 'path';
 import { tmpdir } from 'os';
 import { execFileSync } from 'child_process';
 
@@ -179,6 +179,86 @@ describe('memnant setup codex', () => {
   it('warns if memnant is not initialised', () => {
     const result = runMemnant(['setup', 'codex'], testDir, { HOME: fakeHome });
     expect(result.stdout).toContain("Run 'memnant init' first");
+  });
+});
+
+describe('memnant setup git-hooks', () => {
+  let baseDir: string;
+  let fakeHome: string;
+
+  beforeEach(async () => {
+    baseDir = realpathSync(await mkdtemp(join(tmpdir(), 'memnant-hooks-')));
+    fakeHome = realpathSync(await mkdtemp(join(tmpdir(), 'memnant-home-')));
+  });
+
+  afterEach(async () => {
+    await rm(baseDir, { recursive: true, force: true });
+    await rm(fakeHome, { recursive: true, force: true });
+  });
+
+  function git(args: string[], cwd: string): void {
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf-8',
+      env: {
+        ...process.env,
+        HOME: fakeHome,
+        GIT_CONFIG_GLOBAL: join(fakeHome, '.gitconfig'),
+        GIT_CONFIG_SYSTEM: '/dev/null',
+      },
+    });
+  }
+
+  it('installs the pre-commit hook into the resolved hooks dir inside a worktree', () => {
+    const mainRepo = join(baseDir, 'main');
+    mkdirSync(mainRepo, { recursive: true });
+    git(['init', '-q'], mainRepo);
+    git(['config', 'user.email', 'test@example.com'], mainRepo);
+    git(['config', 'user.name', 'Test'], mainRepo);
+    git(['commit', '-q', '--allow-empty', '-m', 'init'], mainRepo);
+    git(['branch', 'epic-12'], mainRepo);
+    const worktree = join(baseDir, 'wt');
+    git(['worktree', 'add', '-q', worktree, 'epic-12'], mainRepo);
+
+    const result = runMemnant(['setup', 'git-hooks'], worktree, { HOME: fakeHome });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('memnant pre-commit hook installed.');
+
+    // Resolve the hooks dir exactly as git does from the worktree.
+    const raw = execFileSync('git', ['rev-parse', '--git-path', 'hooks'], {
+      cwd: worktree,
+      encoding: 'utf-8',
+      env: { ...process.env, HOME: fakeHome, GIT_CONFIG_SYSTEM: '/dev/null' },
+    }).trim();
+    const hooksDir = isAbsolute(raw) ? raw : join(worktree, raw);
+    const hookPath = join(hooksDir, 'pre-commit');
+
+    expect(existsSync(hookPath)).toBe(true);
+    expect(readFileSync(hookPath, 'utf-8')).toContain('memnant lint');
+  });
+
+  it('chains with an existing hook and is idempotent in a regular repo', () => {
+    const repo = join(baseDir, 'repo');
+    mkdirSync(repo, { recursive: true });
+    git(['init', '-q'], repo);
+
+    const hooksDir = join(repo, '.git', 'hooks');
+    writeFileSync(join(hooksDir, 'pre-commit'), '#!/bin/sh\necho existing\n', { mode: 0o755 });
+
+    const first = runMemnant(['setup', 'git-hooks'], repo, { HOME: fakeHome });
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain('appended to existing hook');
+
+    const afterFirst = readFileSync(join(hooksDir, 'pre-commit'), 'utf-8');
+    expect(afterFirst).toContain('echo existing');
+    expect(afterFirst).toContain('memnant lint');
+
+    const second = runMemnant(['setup', 'git-hooks'], repo, { HOME: fakeHome });
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain('already installed');
+
+    const afterSecond = readFileSync(join(hooksDir, 'pre-commit'), 'utf-8');
+    expect(afterSecond.match(/memnant lint/g)?.length).toBe(1);
   });
 });
 

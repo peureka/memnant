@@ -6,7 +6,8 @@
 
 import { Command } from 'commander';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { isAbsolute, join } from 'path';
+import { execFileSync } from 'child_process';
 import { homedir } from 'os';
 import * as TOML from 'smol-toml';
 import { claudeCodeInstructions } from './instructions.js';
@@ -174,13 +175,23 @@ export function setupCodex(): void {
 
 export function setupGitHooks(): void {
   const cwd = process.cwd();
-  const gitDir = join(cwd, '.git');
-  if (!existsSync(gitDir)) {
+
+  // Resolve the hooks dir via git so this works in worktrees too, where
+  // `.git` is a file and hooks live in the main repo's shared hooks dir.
+  // `--git-path hooks` may print a path relative to cwd — resolve it.
+  let hooksDir: string;
+  try {
+    const raw = execFileSync('git', ['rev-parse', '--git-path', 'hooks'], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    hooksDir = isAbsolute(raw) ? raw : join(cwd, raw);
+  } catch {
     console.error('Not a git repository. Run `git init` first.');
     process.exit(1);
   }
 
-  const hooksDir = join(gitDir, 'hooks');
   mkdirSync(hooksDir, { recursive: true });
 
   const hookPath = join(hooksDir, 'pre-commit');
