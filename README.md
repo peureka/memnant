@@ -93,6 +93,18 @@ Rejected approaches promote too — so you never retry something that already fa
 
 Deduplication by embedding similarity (>0.92). Manual promotion for anything else: `memnant promote <record-id>`.
 
+## Agent fleets
+
+memnant is built for the way agentic development actually runs: a coordinator and a fleet of subagents in git worktrees.
+
+- **Worktree-native.** Every worktree resolves its own ledger; knowledge converges through git, not a shared database. Branch detection and hook install understand `.git`-as-file. A fresh worktree with config but no ledger repairs itself: `memnant init --team`.
+- **Nothing an agent learns is lost.** Harvest reads every transcript in a project, subagent files included, with a watermark so repeat runs cost nothing. A worktree already deleted? `memnant harvest --transcript-dir <path>` recovers its orphaned transcripts.
+- **Agents without MCP still contribute.** CLI `session close` ships shared records the same way the MCP path does, so a headless agent's decisions travel in its pull request.
+
+## Session logs, written by the ledger
+
+`memnant export-session --latest --out docs/session-logs/` renders any closed session as a markdown log you commit: goal, what shipped, decisions, fixes, what's deferred. Structured template fields (Decision:, Solution:) render as themselves, not as their first sentence. Stop writing session logs by hand; the ledger already knows what happened.
+
 ## Narrative briefings
 
 Session context rendered as a story, not a database dump. Delta-focused — only what changed since you were last here. Empty sections omitted. The briefing shrinks when things are quiet.
@@ -150,13 +162,13 @@ Last import: 2026-03-04T14:22:00Z
 
 **Config.** `memnant.yaml` at your project root. Version-controlled. No dashboard, no account, no login.
 
-**Export.** Markdown or JSON. Every record, every decision, every session log. Your history is never locked in.
+**Export.** Markdown or JSON. Every record, every decision, every session log — including per-session markdown logs via `export-session`. Your history is never locked in.
 
 **Runtime.** Standalone binary — no Node.js required. `curl memnant.com/install.sh | sh` and you're done. ONNX WASM and model files download automatically on first use (~30MB). Also available via `npx memnant` if you prefer npm. Optional `ANTHROPIC_API_KEY` for synthesis — core functionality works fully offline.
 
 ## Who it's for
 
-You work in sessions. Days or weeks apart. You juggle multiple projects that share patterns. You want what you learned yesterday to be there tomorrow — across every tool, every codebase, every session. Solo or on a team.
+You work in sessions. Days or weeks apart. You juggle multiple projects that share patterns. You want what you learned yesterday to be there tomorrow — across every tool, every codebase, every session. Solo, on a team, or orchestrating a fleet of agents.
 
 ## License
 
