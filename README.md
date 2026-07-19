@@ -73,15 +73,15 @@ Three weeks away from a project. One command. Full context. Colony fixes from yo
 
 **It remembers.** The agent logs silently as you work. Decisions, framework fixes, rejections, product calls. Every record gets a vector embedding for semantic search. You don't do anything.
 
-**It compiles.** Next session starts with what matters. Last session's summary, open TODOs, relevant decisions, staleness warnings. Not a raw dump — the relevant subset, with what's changed since you were last here.
+**It compiles.** Next session starts with what matters. Last session's summary, open TODOs, relevant decisions, staleness warnings. Not a raw dump; the relevant subset, with what's changed since you were last here.
 
 **It knows.** It knows when knowledge goes stale. When a file changes, memnant scores whether the change actually affects related decisions. Semantic confidence, not a binary flag. A renamed variable doesn't invalidate an architecture decision.
 
-**It travels.** Knowledge crosses projects automatically. Framework fixes and rejected approaches promote themselves to a machine-local colony at `~/.memnant/colony.db`. The gotcha you solved in one codebase is already waiting in the next — no export needed.
+**It travels.** Knowledge crosses projects automatically. Framework fixes and rejected approaches promote themselves to a machine-local colony at `~/.memnant/colony.db`. The gotcha you solved in one codebase is already waiting in the next. No export needed.
 
 ## The colony
 
-Framework fixes aren't project-specific. When you solve a Next.js gotcha in one project, memnant auto-promotes it to your colony. Next time you start a session in any project, colony results appear marked `[colony]` — ranked below project results at the same similarity.
+Framework fixes aren't project-specific. When you solve a Next.js gotcha in one project, memnant auto-promotes it to your colony. Next time you start a session in any project, colony results appear marked `[colony]`, ranked below project results at the same similarity.
 
 ```
 ── Framework Fixes ──
@@ -89,7 +89,7 @@ Framework fixes aren't project-specific. When you solve a Next.js gotcha in one 
 [colony] React setState batching in concurrent mode
 ```
 
-Rejected approaches promote too — so you never retry something that already failed.
+Rejected approaches promote too, so you never retry something that already failed.
 
 Deduplication by embedding similarity (>0.92). Manual promotion for anything else: `memnant promote <record-id>`.
 
@@ -107,13 +107,13 @@ memnant is built for the way agentic development actually runs: a coordinator an
 
 ## Narrative briefings
 
-Session context rendered as a story, not a database dump. Delta-focused — only what changed since you were last here. Empty sections omitted. The briefing shrinks when things are quiet.
+Session context rendered as a story, not a database dump. Delta-focused: only what changed since you were last here. Empty sections omitted. The briefing shrinks when things are quiet.
 
 When an API key is available, memnant composes a conversational narrative. Offline, it falls back to a smart template. Either way, you get caught up in seconds.
 
 ## Teams
 
-Multiple builders, one shared understanding. `memnant init --team` sets your builder identity from git config. Decisions sync through `.memnant/shared/` — git-native, no extra service.
+Multiple builders, one shared understanding. `memnant init --team` sets your builder identity from git config. Decisions sync through `.memnant/shared/`: git-native, no extra service.
 
 When records from different builders contradict each other (embedding similarity > 0.85), memnant flags the contradiction automatically. `memnant team status` shows active builders, record counts, and unresolved conflicts.
 
@@ -142,7 +142,7 @@ Last import: 2026-03-04T14:22:00Z
 
 **Synthesis.** Ask questions that span multiple records. "How did our auth approach evolve?" returns a composed answer with citations back to source.
 
-**Governance.** Spec enforcement in pre-commit hooks. Override tracking — when overrides pile up, memnant suggests the spec might need updating.
+**Governance.** Spec enforcement in pre-commit hooks. Override tracking: when overrides pile up, memnant suggests the spec might need updating.
 
 **Predictive context.** File-aware. Branch-aware. Working patterns from past sessions boost future relevance. Surfaces the right records before you ask.
 
@@ -150,7 +150,7 @@ Last import: 2026-03-04T14:22:00Z
 
 **Team layer.** Shared understanding across builders. Git-native sync, contradiction detection, builder-filtered recall, onboarding briefs, and team pattern analysis.
 
-**Ant behaviours.** Knowledge that compounds with use. Pheromone trails boost records accessed together — "you always look at these two decisions side by side." Stigmergy detects when a teammate logs something for a file you're working on and surfaces it immediately. Colony patterns confirmed by 3+ projects recruit themselves into every session. Decision churn alerts flag topics superseded 3+ times — the underlying tension needs resolving, not another revision.
+**Ant behaviours.** Knowledge that compounds with use. Pheromone trails boost records accessed together: "you always look at these two decisions side by side." Stigmergy detects when a teammate logs something for a file you're working on and surfaces it immediately. Colony patterns confirmed by 3+ projects recruit themselves into every session. Decision churn alerts flag topics superseded 3+ times; the underlying tension needs resolving, not another revision.
 
 ## Under the hood
 
@@ -162,13 +162,13 @@ Last import: 2026-03-04T14:22:00Z
 
 **Config.** `memnant.yaml` at your project root. Version-controlled. No dashboard, no account, no login.
 
-**Export.** Markdown or JSON. Every record, every decision, every session log — including per-session markdown logs via `export-session`. Your history is never locked in.
+**Export.** Markdown or JSON. Every record, every decision, every session log, including per-session markdown logs via `export-session`. Your history is never locked in.
 
-**Runtime.** Standalone binary — no Node.js required. `curl memnant.com/install.sh | sh` and you're done. ONNX WASM and model files download automatically on first use (~30MB). Also available via `npx memnant` if you prefer npm. Optional `ANTHROPIC_API_KEY` for synthesis — core functionality works fully offline.
+**Runtime.** Standalone binary, no Node.js required. `curl memnant.com/install.sh | sh` and you're done. ONNX WASM and model files download automatically on first use (~30MB). Also available via `npx memnant` if you prefer npm. Optional `ANTHROPIC_API_KEY` for synthesis; core functionality works fully offline.
 
 ## Who it's for
 
-You work in sessions. Days or weeks apart. You juggle multiple projects that share patterns. You want what you learned yesterday to be there tomorrow — across every tool, every codebase, every session. Solo, on a team, or orchestrating a fleet of agents.
+You work in sessions. Days or weeks apart. You juggle multiple projects that share patterns. You want what you learned yesterday to be there tomorrow, across every tool, every codebase, every session. Solo, on a team, or orchestrating a fleet of agents.
 
 ## License
 
