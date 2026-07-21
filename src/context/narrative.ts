@@ -105,15 +105,6 @@ export function renderTemplateBriefing(ctx: CompiledContext, opts: BriefingOptio
     lines.push('');
   }
 
-  // Decision churn
-  if (ctx.sections.churn_alerts && ctx.sections.churn_alerts.length > 0) {
-    lines.push('Decision churn:');
-    for (const a of ctx.sections.churn_alerts) {
-      lines.push(`  ${a}`);
-    }
-    lines.push('');
-  }
-
   // Override suggestions
   if (ctx.sections.override_suggestions && ctx.sections.override_suggestions.length > 0) {
     lines.push('Override suggestions:');
