@@ -119,6 +119,18 @@ describe('memnant session start', { timeout: 120_000 }, () => {
     db.close();
   });
 
+  // Choreography reaches the CLI path (default-on), not just MCP.
+  it('surfaces the choreography process layer in CLI output', () => {
+    runMemnant(
+      ['log', '--type', 'decision', '--content', 'Tried Redis for sessions, rejected: ops overhead', '--tags', 'rejected,choreo-epic'],
+      testDir,
+    );
+    const result = runMemnant(['session', 'start', '--dry-run', '--epic', 'choreo-epic'], testDir);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('## Process');
+    expect(result.stdout).toContain('do not re-propose');
+  });
+
   // AC 3: --epic filters context to relevant records
   it('--epic filters context to relevant records', () => {
     const result = runMemnant(['session', 'start', '--epic', 'Analytics v2'], testDir);
