@@ -180,7 +180,6 @@ export interface CompiledContext {
     team_decisions?: string[];
     team_updates?: string[];
     colony_patterns?: string[];
-    churn_alerts?: string[];
     sibling_decisions?: string[];
     sibling_fixes?: string[];
     process_guidance?: ProcessNudge[];
