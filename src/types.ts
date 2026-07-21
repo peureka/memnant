@@ -143,6 +143,17 @@ export interface TierConfig {
   api_key_env?: string;
 }
 
+/**
+ * A single advisory choreography nudge: "what the workflow expects next".
+ * Derived from ledger + doc state at compile time. Advisory only —
+ * memnant emits it, the host agent acts on it.
+ */
+export interface ProcessNudge {
+  stage: string;
+  message: string;
+  refs?: string[];
+}
+
 export interface CompiledContext {
   token_estimate: number;
   warnings: string[];
@@ -167,5 +178,6 @@ export interface CompiledContext {
     churn_alerts?: string[];
     sibling_decisions?: string[];
     sibling_fixes?: string[];
+    process_guidance?: ProcessNudge[];
   };
 }
