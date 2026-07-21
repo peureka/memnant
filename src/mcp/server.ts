@@ -23,6 +23,7 @@ import { RECORD_TYPES } from '../types.js';
 import type { ProjectConfig, RecordType } from '../types.js';
 import { loadConfig, ConfigError, findProjectRoot } from '../config/load.js';
 import { compileContext } from '../context/compile.js';
+import { resolveChoreographyOptions } from '../context/choreography.js';
 import { getActiveSession, closeSession, getSessionRecordCounts } from '../ledger/sessions.js';
 import { checkCopy } from '../governor/copy-check.js';
 import { checkDesign } from '../governor/design-check.js';
@@ -576,7 +577,14 @@ export async function startServer(): Promise<void> {
       }
 
       const docsPath = join(projectRoot, config.governor.docs_path);
-      const ctx = await compileContext(db, { epic, docsPath, projectRoot: projectRoot, projectId: config.project.id, builder: config.project.builder });
+      const ctx = await compileContext(db, {
+        epic,
+        docsPath,
+        projectRoot: projectRoot,
+        projectId: config.project.id,
+        builder: config.project.builder,
+        choreography: resolveChoreographyOptions(config),
+      });
 
       // Auto-snapshot: staleness tracking is inert without a baseline.
       // Compile runs first so an aging snapshot still flags stale records
@@ -637,36 +645,9 @@ export async function startServer(): Promise<void> {
         // Profile injection is best-effort
       }
 
-      // Surface review pressure
-      try {
-        const { findDecisionsDueForReview } = await import('../relevance/review-pressure.js');
-        const reviewDays = config.memory.review_pressure_days ?? 90;
-        const reviewCandidates = findDecisionsDueForReview(db, config.project.id, reviewDays);
-        if (reviewCandidates.length > 0) {
-          ctx.sections.review_pressure = [
-            '── Decisions Due for Review ──',
-            ...reviewCandidates.map(r => `[review? ${r.days_old}d] ${r.id.slice(0, 8)} — ${r.content_text.slice(0, 120)}`),
-          ];
-        }
-      } catch {
-        // Review pressure is best-effort
-      }
-
-      // Surface active assumptions
-      try {
-        const { getActiveAssumptions } = await import('../context/assumptions.js');
-        const activeAssumptions = getActiveAssumptions(db, config.project.id);
-        if (activeAssumptions.length > 0) {
-          ctx.sections.assumptions = [
-            '── Active Assumptions ──',
-            ...activeAssumptions.map(a =>
-              `"${a.assumption}" — ${a.decisions.length} decision${a.decisions.length > 1 ? 's' : ''} depend on this`
-            ),
-          ];
-        }
-      } catch {
-        // Assumption surfacing is best-effort
-      }
+      // Review pressure and active assumptions are now surfaced through the
+      // choreography layer (process_guidance), computed in compileContext.
+      // See src/context/choreography.ts — one coherent source, no duplication.
 
       // Stigmergy: surface cross-builder updates and contradictions for active files
       try {
@@ -714,16 +695,8 @@ export async function startServer(): Promise<void> {
         // Colony recruitment is best-effort
       }
 
-      // Death spiral detection: surface churn alerts
-      try {
-        const { computeChurnMetrics, formatChurnAlerts } = await import('../analytics/churn.js');
-        const churnMetrics = computeChurnMetrics(db);
-        if (churnMetrics.length > 0) {
-          ctx.sections.churn_alerts = formatChurnAlerts(churnMetrics);
-        }
-      } catch {
-        // Churn alerts are best-effort
-      }
+      // Death-spiral churn alerts are now surfaced through the choreography
+      // layer (process_guidance, stage 'churn'), computed in compileContext.
 
       // Workspace: surface relevant sibling project records
       try {
@@ -787,6 +760,8 @@ export async function startServer(): Promise<void> {
         ...ctx,
         narrative: briefing.text,
         narrative_source: briefing.fallback ? 'template' : 'llm',
+        // Structured choreography nudges for agents that act on typed signals.
+        process: ctx.sections.process_guidance ?? [],
       };
 
       const responseText = JSON.stringify(response, null, 2);
