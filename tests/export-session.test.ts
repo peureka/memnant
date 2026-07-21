@@ -114,7 +114,11 @@ describe('memnant export-session', { timeout: 180_000 }, () => {
     expect(existsSync(written)).toBe(true);
 
     const md = await readFile(written, 'utf-8');
-    expect(md).toMatch(/^# \d{4}-\d{2}-\d{2} — .+ — /m);
+    // Header uses the middle-dot separator, not em dashes (product ethos).
+    expect(md).toMatch(/^# \d{4}-\d{2}-\d{2} · .+ · /m);
+    const header = md.split('\n')[0];
+    expect(header).not.toContain('—');
+    expect(header).not.toContain('–');
     expect(md).toContain('**Goal**: Set up the analytics dashboard skeleton.');
     expect(md).toContain('**Done**:');
     expect(md).toContain('- Wired the metrics API route.');

@@ -291,7 +291,7 @@ function renderMarkdown(params: {
   const { date, projectName, slug, summary, sessionLogs, decisions, fixes } = params;
   const parts: string[] = [];
 
-  parts.push(`# ${date} — ${projectName} — ${slug}`);
+  parts.push(`# ${date} · ${projectName} · ${slug}`);
 
   // Inline-marker summaries (legacy single-line paragraphs) parse from segments;
   // multi-line summaries keep the line-based parsing.
