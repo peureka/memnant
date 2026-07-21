@@ -77,9 +77,10 @@ export async function defaultAction(): Promise<void> {
       // State 2: No active session → start session + print context
       const { compileContext, formatContextAsMarkdown } = await import('../context/compile.js');
       const { getLastSnapshotDate } = await import('../snapshot/scanner.js');
+      const { resolveChoreographyOptions } = await import('../context/choreography.js');
 
       const docsPath = join(projectRoot, config.governor.docs_path);
-      const ctx = await compileContext(db, { docsPath, projectRoot, builder: config.project.builder });
+      const ctx = await compileContext(db, { docsPath, projectRoot, projectId: config.project.id, builder: config.project.builder, choreography: resolveChoreographyOptions(config) });
 
       // Snapshot age reminder
       if (config.memory.snapshot_interval === 'monthly') {

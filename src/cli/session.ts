@@ -81,6 +81,7 @@ export function registerSessionCommand(program: Command): void {
       const { openDatabase } = await import('../ledger/database.js');
       const { createSession, getActiveSession, closeSessionSkipped } = await import('../ledger/sessions.js');
       const { compileContext, formatContextAsMarkdown } = await import('../context/compile.js');
+      const { resolveChoreographyOptions } = await import('../context/choreography.js');
 
       const { config, dbPath, projectRoot } = await loadProjectConfig();
       const db = openDatabase(dbPath);
@@ -102,7 +103,7 @@ export function registerSessionCommand(program: Command): void {
 
         // Compile context
         const docsPath = join(projectRoot, config.governor.docs_path);
-        const ctx = await compileContext(db, { epic: opts.epic, docsPath, projectRoot, builder: config.project.builder });
+        const ctx = await compileContext(db, { epic: opts.epic, docsPath, projectRoot, projectId: config.project.id, builder: config.project.builder, choreography: resolveChoreographyOptions(config) });
 
         // Auto-snapshot: staleness tracking is inert without a baseline, and
         // a project that never snapshotted was previously never even warned.
