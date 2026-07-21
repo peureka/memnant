@@ -124,6 +124,11 @@ export interface ProjectConfig {
     allow_deploy: boolean;
     allowed_mcp_tools: string[];
   };
+  context?: {
+    choreography?: boolean;   // master switch for the choreography layer (default true)
+    review_tag?: string;      // tag that signals a spec has been cross-reviewed (default codex-review)
+    stages?: string[];        // which choreography stages are active (default: all)
+  };
   session?: {
     auto_close_minutes?: number;
     max_duration_hours?: number;
@@ -141,6 +146,17 @@ export interface TierConfig {
   max_context_tokens?: number;
   base_url?: string;
   api_key_env?: string;
+}
+
+/**
+ * A single advisory choreography nudge: "what the workflow expects next".
+ * Derived from ledger + doc state at compile time. Advisory only —
+ * memnant emits it, the host agent acts on it.
+ */
+export interface ProcessNudge {
+  stage: string;
+  message: string;
+  refs?: string[];
 }
 
 export interface CompiledContext {
@@ -167,5 +183,6 @@ export interface CompiledContext {
     churn_alerts?: string[];
     sibling_decisions?: string[];
     sibling_fixes?: string[];
+    process_guidance?: ProcessNudge[];
   };
 }

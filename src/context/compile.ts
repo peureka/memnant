@@ -41,6 +41,15 @@ export interface CompileOptions {
   projectRoot?: string;
   projectId?: string;
   builder?: string;  // Current builder name — enables team decisions section
+  // Choreography layer (advisory process nudges). Provided by the
+  // session_context path; omitted by CLI callers. Best-effort — a throw
+  // degrades to context without the process layer, never an error.
+  choreography?: {
+    enabled: boolean;
+    reviewTag: string;
+    stages: readonly string[];
+    reviewPressureDays: number;
+  };
 }
 
 interface RecordRow {
@@ -196,6 +205,27 @@ export async function compileContext(db: Database, opts: CompileOptions): Promis
       team_decisions: teamDecisions,
     },
   };
+
+  // Choreography: derive advisory process nudges. Best-effort — a throw
+  // here must degrade to context without the process layer (plan principle 5).
+  if (opts.choreography?.enabled && opts.projectId) {
+    try {
+      const { computeChoreography } = await import('./choreography.js');
+      const nudges = computeChoreography(db, {
+        projectId: opts.projectId,
+        epic: opts.epic,
+        reviewTag: opts.choreography.reviewTag,
+        stages: opts.choreography.stages,
+        reviewPressureDays: opts.choreography.reviewPressureDays,
+      });
+      if (nudges.length > 0) {
+        ctx.sections.process_guidance = nudges;
+      }
+    } catch (err) {
+      // Degrade silently to context without the process layer.
+      console.error(`choreography failed (non-blocking): ${err}`);
+    }
+  }
 
   // Estimate tokens (~4 chars per token)
   ctx.token_estimate = Math.ceil(contextToString(ctx).length / 4);
@@ -752,6 +782,15 @@ export function formatContextAsMarkdown(ctx: CompiledContext): string {
     parts.push('');
   }
 
+  // Process guidance (choreography) — terse, omitted when empty.
+  if (ctx.sections.process_guidance && ctx.sections.process_guidance.length > 0) {
+    parts.push('## Process\n');
+    for (const n of ctx.sections.process_guidance) {
+      parts.push(`- [${n.stage}] ${n.message}`);
+    }
+    parts.push('');
+  }
+
   // 8. Sibling project context (workspace)
   if (ctx.sections.sibling_decisions && ctx.sections.sibling_decisions.length > 0) {
     parts.push('## Sibling Project Decisions\n');
@@ -788,6 +827,7 @@ function contextToString(ctx: CompiledContext): string {
     ctx.sections.spec_constraints.join(' '),
     ctx.sections.persona_tests.join(' '),
     ctx.sections.stale_decisions.join(' '),
+    (ctx.sections.process_guidance ?? []).map((n) => `${n.stage} ${n.message}`).join(' '),
   ];
   return parts.join(' ');
 }
