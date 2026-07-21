@@ -14,7 +14,7 @@
  */
 
 import type { Database } from '../ledger/database.js';
-import type { ProcessNudge } from '../types.js';
+import type { ProcessNudge, ProjectConfig } from '../types.js';
 import { getActiveAssumptions } from './assumptions.js';
 import { computeChurnMetrics, formatChurnAlerts } from '../analytics/churn.js';
 import { findDecisionsDueForReview } from '../relevance/review-pressure.js';
@@ -40,6 +40,28 @@ export interface ChoreographyOptions {
   reviewTag?: string;
   stages?: readonly string[];
   reviewPressureDays?: number;
+}
+
+/** Resolved choreography settings passed into compileContext. */
+export interface ResolvedChoreography {
+  enabled: boolean;
+  reviewTag: string;
+  stages: readonly string[];
+  reviewPressureDays: number;
+}
+
+/**
+ * Resolve the choreography settings from project config.
+ * ON-but-quiet by default (PJ decision): enabled unless explicitly `false`.
+ */
+export function resolveChoreographyOptions(config: ProjectConfig): ResolvedChoreography {
+  const c = config.context;
+  return {
+    enabled: c?.choreography !== false,
+    reviewTag: c?.review_tag ?? DEFAULT_REVIEW_TAG,
+    stages: c?.stages ?? [...DEFAULT_STAGES],
+    reviewPressureDays: config.memory?.review_pressure_days ?? 90,
+  };
 }
 
 /** SQLite JSON-array LIKE fragment for an exact tag match. */

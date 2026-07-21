@@ -124,6 +124,11 @@ export interface ProjectConfig {
     allow_deploy: boolean;
     allowed_mcp_tools: string[];
   };
+  context?: {
+    choreography?: boolean;   // master switch for the choreography layer (default true)
+    review_tag?: string;      // tag that signals a spec has been cross-reviewed (default codex-review)
+    stages?: string[];        // which choreography stages are active (default: all)
+  };
   session?: {
     auto_close_minutes?: number;
     max_duration_hours?: number;

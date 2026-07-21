@@ -52,6 +52,10 @@ export function createDefaultConfig(
       lint_on_pr: true,
       strict_mode: false,
     },
+    context: {
+      choreography: true,       // advisory workflow nudges in session_context (ON-but-quiet)
+      review_tag: 'codex-review', // tag that signals a spec has been cross-reviewed
+    },
     security: {
       staging_only: true,
       allow_deploy: false,
