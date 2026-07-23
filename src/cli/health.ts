@@ -44,7 +44,7 @@ export function registerHealthCommand(program: Command): void {
       const db = openDatabase(dbPath);
 
       try {
-        const report = gatherHealth(db, config, projectRoot);
+        const report = await gatherHealth(db, config, projectRoot);
 
         if (opts.json) {
           process.stdout.write(JSON.stringify(report, null, 2) + '\n');
