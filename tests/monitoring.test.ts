@@ -71,14 +71,40 @@ describe('Story 13.1: Health summary', () => {
     await rm(testDir, { recursive: true, force: true });
   });
 
-  it('returns healthy status for empty project', () => {
+  it('returns healthy status for empty project', async () => {
     const config = makeConfig();
-    const report = gatherHealth(db, config, testDir);
+    const report = await gatherHealth(db, config, testDir);
 
     expect(report.status).toBe('healthy');
     expect(report.project_name).toBe('test-project');
     expect(report.record_count).toBe(0);
     expect(report.session_count).toBe(0);
+  });
+
+  it('stale_count reflects dynamically stale records, not the dead column', async () => {
+    const config = makeConfig();
+    // snapshot at left-pad ^1.0.0; package.json now ^2.0.0; a fix mentions left-pad -> live-stale
+    writeFileSync(
+      join(testDir, 'package.json'),
+      JSON.stringify({ name: 'test', dependencies: { 'left-pad': '^2.0.0' } }, null, 2),
+    );
+    db.run(
+      `INSERT INTO record (id, project_id, type, content, content_text, embedding, created_at)
+       VALUES (?, ?, 'codebase_snapshot', ?, 'snapshot', ?, ?)`,
+      [
+        'snap-1', PROJECT_ID,
+        JSON.stringify({ files: [], dependencies: { 'left-pad': '^1.0.0' }, file_count: 0 }),
+        serializeEmbedding(await generateEmbedding('snap')), new Date().toISOString(),
+      ],
+    );
+    insertRecord(db, {
+      projectId: PROJECT_ID, type: 'framework_fix',
+      contentText: 'Pinned left-pad after the breaking 2.0 upgrade',
+      embedding: serializeEmbedding(await generateEmbedding('left-pad')),
+    });
+
+    const report = await gatherHealth(db, config, testDir);
+    expect(report.stale_count).toBe(1);
   });
 
   it('counts records correctly', async () => {
@@ -91,7 +117,7 @@ describe('Story 13.1: Health summary', () => {
       embedding: serializeEmbedding(embedding),
     });
 
-    const report = gatherHealth(db, config, testDir);
+    const report = await gatherHealth(db, config, testDir);
     expect(report.record_count).toBe(1);
   });
 
@@ -120,7 +146,7 @@ describe('Story 13.1: Health summary', () => {
       ['rel-1', rec1.id, rec2.id, new Date().toISOString()],
     );
 
-    const report = gatherHealth(db, config, testDir);
+    const report = await gatherHealth(db, config, testDir);
     expect(report.unresolved_contradictions).toBe(1);
     expect(report.status).toBe('attention');
     expect(report.issues.some(i => i.includes('contradiction'))).toBe(true);

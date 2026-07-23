@@ -8,6 +8,7 @@ import type { Database } from '../ledger/database.js';
 import type { ProjectConfig } from '../types.js';
 import { getUnresolvedContradictions } from '../graph/relationships.js';
 import { getLastSnapshotDate } from '../snapshot/scanner.js';
+import { computeLiveStaleRecordIds } from '../context/compile.js';
 
 export type HealthStatus = 'healthy' | 'attention' | 'critical';
 
@@ -27,11 +28,11 @@ export interface HealthReport {
 /**
  * Gather health report for the project.
  */
-export function gatherHealth(
+export async function gatherHealth(
   db: Database,
   config: ProjectConfig,
   projectRoot: string,
-): HealthReport {
+): Promise<HealthReport> {
   const issues: string[] = [];
 
   // Record count
@@ -70,11 +71,10 @@ export function gatherHealth(
   // Unresolved contradictions
   const contradictions = getUnresolvedContradictions(db);
 
-  // Stale count (records with staleness markers)
-  const staleRow = db.get(
-    "SELECT COUNT(*) as count FROM record WHERE staleness_marker IS NOT NULL AND staleness_marker != 'null'",
-  ) as unknown as { count: number };
-  const staleCount = staleRow.count;
+  // Stale count from the LIVE staleness path (file-hash + AST + semantic), the
+  // same source recall/stats use. The old staleness_marker column was never
+  // written; querying it always returned 0. Degrades to 0 with no snapshot.
+  const staleCount = (await computeLiveStaleRecordIds(db, projectRoot)).size;
 
   // Record growth in last 7 days
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
