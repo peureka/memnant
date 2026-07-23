@@ -35,7 +35,7 @@ async function loadDb() {
     process.exit(1);
   }
 
-  return openDatabase(dbPath);
+  return { db: openDatabase(dbPath), projectRoot };
 }
 
 function parseDuration(duration: string): number {
@@ -62,7 +62,7 @@ export function registerArchiveCommand(program: Command): void {
         process.exit(1);
       }
 
-      const db = await loadDb();
+      const { db, projectRoot } = await loadDb();
       try {
         if (opts.id) {
           archiveRecord(db, opts.id);
@@ -74,7 +74,7 @@ export function registerArchiveCommand(program: Command): void {
         }
         if (opts.staleOlderThan) {
           const days = parseDuration(opts.staleOlderThan);
-          const count = archiveStaleOlderThan(db, days);
+          const count = await archiveStaleOlderThan(db, days, projectRoot);
           console.log(`Archived ${count} stale record(s) older than ${days} days.`);
         }
       } catch (err: unknown) {
@@ -98,7 +98,7 @@ export function registerArchiveCommand(program: Command): void {
         process.exit(1);
       }
 
-      const db = await loadDb();
+      const { db } = await loadDb();
       try {
         if (opts.id) {
           unarchiveRecord(db, opts.id);

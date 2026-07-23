@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
+import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { createDatabase, type Database } from '../src/ledger/database.js';
@@ -51,6 +52,44 @@ describe('Ledger Administration', () => {
       contentText: content,
       embedding: DUMMY_EMBEDDING,
     });
+  }
+
+  // Seed the LIVE staleness path deterministically (no embedding model, no
+  // tree-sitter): write a package.json whose left-pad version differs from a
+  // stored codebase_snapshot, so left-pad reads as a changed dependency. Any
+  // framework_fix that mentions left-pad is then dynamically stale, exactly as
+  // recall/compile would compute it.
+  function seedChangedDependency() {
+    writeFileSync(
+      join(testDir, 'package.json'),
+      JSON.stringify({ name: 'test', dependencies: { 'left-pad': '^2.0.0' } }, null, 2),
+    );
+    db.run(
+      `INSERT INTO record (id, project_id, type, content, content_text, embedding, created_at)
+       VALUES (?, ?, 'codebase_snapshot', ?, 'snapshot', ?, ?)`,
+      [
+        'snap-1',
+        PROJECT_ID,
+        JSON.stringify({ files: [], dependencies: { 'left-pad': '^1.0.0' }, file_count: 0 }),
+        DUMMY_EMBEDDING,
+        new Date().toISOString(),
+      ],
+    );
+  }
+
+  function insertFix(content: string) {
+    return insertRecord(db, {
+      projectId: PROJECT_ID,
+      type: 'framework_fix',
+      contentText: content,
+      embedding: DUMMY_EMBEDDING,
+    });
+  }
+
+  function backdate(recordId: string, days: number) {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    db.run('UPDATE record SET created_at = ? WHERE id = ?', [d.toISOString(), recordId]);
   }
 
   describe('Record Retraction', () => {
@@ -245,18 +284,12 @@ describe('Ledger Administration', () => {
       expect(count).toBe(0);
     });
 
-    it('archiveStaleOlderThan archives stale records older than N days', () => {
-      const record = insertTestRecord('Decision: old and stale');
+    it('archiveStaleOlderThan archives a dynamically stale record older than N days', async () => {
+      seedChangedDependency();
+      const record = insertFix('Pinned left-pad after the breaking 2.0 upgrade');
+      backdate(record.id, 100);
 
-      // Set staleness_marker and backdate created_at
-      const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 100);
-      db.run(
-        'UPDATE record SET staleness_marker = ?, created_at = ? WHERE id = ?',
-        [JSON.stringify({ reason: 'file changed' }), oldDate.toISOString(), record.id],
-      );
-
-      const count = archiveStaleOlderThan(db, 30);
+      const count = await archiveStaleOlderThan(db, 30, testDir);
       expect(count).toBe(1);
 
       const row = db.get('SELECT archived_at FROM record WHERE id = ?', [record.id]) as unknown as {
@@ -265,47 +298,42 @@ describe('Ledger Administration', () => {
       expect(row.archived_at).not.toBeNull();
     });
 
-    it('archiveStaleOlderThan does not archive stale records newer than N days', () => {
-      const record = insertTestRecord('Decision: stale but recent');
+    it('archiveStaleOlderThan does not archive a dynamically stale record newer than N days', async () => {
+      seedChangedDependency();
+      // created now — stale, but younger than the cutoff
+      insertFix('Pinned left-pad after the breaking 2.0 upgrade');
 
-      // Set staleness_marker but keep created_at as now
-      db.run(
-        'UPDATE record SET staleness_marker = ? WHERE id = ?',
-        [JSON.stringify({ reason: 'file changed' }), record.id],
-      );
-
-      const count = archiveStaleOlderThan(db, 30);
+      const count = await archiveStaleOlderThan(db, 30, testDir);
       expect(count).toBe(0);
     });
 
-    it('archiveStaleOlderThan does not archive non-stale old records', () => {
-      const record = insertTestRecord('Decision: old but not stale');
+    it('archiveStaleOlderThan does not archive a non-stale old record', async () => {
+      seedChangedDependency();
+      // old, but does not mention the changed dependency → not dynamically stale
+      const record = insertFix('Unrelated fix about widget rendering');
+      backdate(record.id, 100);
 
-      // Backdate created_at but do NOT set staleness_marker
-      const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 100);
-      db.run(
-        'UPDATE record SET created_at = ? WHERE id = ?',
-        [oldDate.toISOString(), record.id],
-      );
-
-      const count = archiveStaleOlderThan(db, 30);
+      const count = await archiveStaleOlderThan(db, 30, testDir);
       expect(count).toBe(0);
     });
 
-    it('archiveStaleOlderThan does not double-archive already archived records', () => {
-      const record = insertTestRecord('Decision: already archived');
-
-      const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 100);
-      db.run(
-        'UPDATE record SET staleness_marker = ?, created_at = ? WHERE id = ?',
-        [JSON.stringify({ reason: 'file changed' }), oldDate.toISOString(), record.id],
-      );
-
+    it('archiveStaleOlderThan does not double-archive already archived records', async () => {
+      seedChangedDependency();
+      const record = insertFix('Pinned left-pad after the breaking 2.0 upgrade');
+      backdate(record.id, 100);
       archiveRecord(db, record.id);
 
-      const count = archiveStaleOlderThan(db, 30);
+      const count = await archiveStaleOlderThan(db, 30, testDir);
+      expect(count).toBe(0);
+    });
+
+    it('archiveStaleOlderThan returns 0 gracefully when no project root is given', async () => {
+      seedChangedDependency();
+      const record = insertFix('Pinned left-pad after the breaking 2.0 upgrade');
+      backdate(record.id, 100);
+
+      // Without a project root there is nothing to diff against — no crash, 0 archived.
+      const count = await archiveStaleOlderThan(db, 30);
       expect(count).toBe(0);
     });
   });

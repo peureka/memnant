@@ -981,7 +981,7 @@ export async function startServer(): Promise<void> {
       await onToolCall();
       log('memnant_stats');
 
-      const stats = getLedgerStats(db);
+      const stats = await getLedgerStats(db, projectRoot);
 
       return {
         content: [{

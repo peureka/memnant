@@ -48,7 +48,7 @@ describe('Ledger Administration Integration', () => {
     });
   }
 
-  it('full lifecycle: create, retract, archive, stats, unretract, unarchive', () => {
+  it('full lifecycle: create, retract, archive, stats, unretract, unarchive', async () => {
     // 1. Insert 5 records
     const r1 = insertTestRecord('Decision: use React');
     const r2 = insertTestRecord('Decision: use Postgres');
@@ -56,7 +56,7 @@ describe('Ledger Administration Integration', () => {
     const r4 = insertTestRecord('Decision: use Tailwind');
     const r5 = insertTestRecord('Decision: use Vercel');
 
-    let stats = getLedgerStats(db);
+    let stats = await getLedgerStats(db);
     expect(stats.records.total).toBe(5);
     expect(stats.records.active).toBe(5);
     expect(stats.records.retracted).toBe(0);
@@ -64,13 +64,13 @@ describe('Ledger Administration Integration', () => {
 
     // 2. Retract one
     retractRecord(db, r1.id, 'Switched to Vue');
-    stats = getLedgerStats(db);
+    stats = await getLedgerStats(db);
     expect(stats.records.active).toBe(4);
     expect(stats.records.retracted).toBe(1);
 
     // 3. Archive one
     archiveRecord(db, r2.id);
-    stats = getLedgerStats(db);
+    stats = await getLedgerStats(db);
     expect(stats.records.active).toBe(3);
     expect(stats.records.archived).toBe(1);
 
@@ -88,13 +88,13 @@ describe('Ledger Administration Integration', () => {
 
     // 5. Unretract — verify included again
     unretractRecord(db, r1.id);
-    stats = getLedgerStats(db);
+    stats = await getLedgerStats(db);
     expect(stats.records.active).toBe(4);
     expect(stats.records.retracted).toBe(0);
 
     // 6. Unarchive — verify included again
     unarchiveRecord(db, r2.id);
-    stats = getLedgerStats(db);
+    stats = await getLedgerStats(db);
     expect(stats.records.active).toBe(5);
     expect(stats.records.archived).toBe(0);
 
@@ -104,7 +104,7 @@ describe('Ledger Administration Integration', () => {
     expect(stats.records.byType['framework_fix']).toBe(1);
   });
 
-  it('migration from v2 database preserves existing data', () => {
+  it('migration from v2 database preserves existing data', async () => {
     // Close the current db (already v3)
     db.close();
 

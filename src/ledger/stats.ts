@@ -6,6 +6,7 @@
 
 import type { Database } from './database.js';
 import { MODEL_NAME } from '../vector/embedding-utils.js';
+import { computeLiveStaleRecordIds } from '../context/compile.js';
 
 export interface LedgerStats {
   records: {
@@ -59,7 +60,7 @@ export interface LedgerStats {
   };
 }
 
-export function getLedgerStats(db: Database): LedgerStats {
+export async function getLedgerStats(db: Database, projectRoot?: string): Promise<LedgerStats> {
   // Total records (all, including retracted/archived)
   const totalRow = db.get('SELECT COUNT(*) as count FROM record') as unknown as { count: number };
   const total = totalRow.count;
@@ -95,10 +96,13 @@ export function getLedgerStats(db: Database): LedgerStats {
     'SELECT started_at FROM session ORDER BY started_at DESC LIMIT 1',
   ) as unknown as { started_at: string } | undefined;
 
-  // Stale count (records with staleness_marker set, active only)
-  const staleRow = db.get(
-    "SELECT COUNT(*) as count FROM record WHERE staleness_marker IS NOT NULL AND staleness_marker != '{}' AND retracted_at IS NULL AND archived_at IS NULL",
-  ) as unknown as { count: number };
+  // Stale count — computed from the LIVE staleness path (file-hash + semantic +
+  // AST), the same source of truth recall/compile use. Nothing is persisted, so
+  // this always reflects the current codebase. Requires a project root and a
+  // codebase snapshot to diff against; without either it is legitimately 0.
+  const staleCount = projectRoot
+    ? (await computeLiveStaleRecordIds(db, projectRoot)).size
+    : 0;
 
   // Unresolved contradictions
   const contradictionRow = db.get(
@@ -180,7 +184,7 @@ export function getLedgerStats(db: Database): LedgerStats {
       lastSessionAt: lastSessionRow?.started_at ?? null,
     },
     staleness: {
-      staleCount: staleRow.count,
+      staleCount,
     },
     contradictions: {
       unresolvedCount: contradictionRow.count,

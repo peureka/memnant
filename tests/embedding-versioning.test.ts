@@ -30,7 +30,7 @@ describe('Embedding Versioning', () => {
     await rm(testDir, { recursive: true, force: true });
   });
 
-  it('stores embedding_model on insert with current MODEL_NAME', () => {
+  it('stores embedding_model on insert with current MODEL_NAME', async () => {
     const embedding = new Float32Array(384).fill(0.1);
     const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
 
@@ -45,7 +45,7 @@ describe('Embedding Versioning', () => {
     expect(row.embedding_model).toBe(MODEL_NAME);
   });
 
-  it('record object includes embedding_model field', () => {
+  it('record object includes embedding_model field', async () => {
     const embedding = new Float32Array(384).fill(0.1);
     const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
 
@@ -59,7 +59,7 @@ describe('Embedding Versioning', () => {
     expect(record.embedding_model).toBe(MODEL_NAME);
   });
 
-  it('allows custom embedding_model for imported records', () => {
+  it('allows custom embedding_model for imported records', async () => {
     const embedding = new Float32Array(384).fill(0.1);
     const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
 
@@ -76,7 +76,7 @@ describe('Embedding Versioning', () => {
     expect(record.embedding_model).toBe('Xenova/all-MiniLM-L6-v1');
   });
 
-  it('flags stale_embedding when record has mismatched embedding_model', () => {
+  it('flags stale_embedding when record has mismatched embedding_model', async () => {
     const embedding = new Float32Array(384).fill(0.1);
     const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
 
@@ -108,7 +108,7 @@ describe('Embedding Versioning', () => {
     expect(currentResult!.stale_embedding).toBe(false);
   });
 
-  it('stats reports embedding model and mismatch count', () => {
+  it('stats reports embedding model and mismatch count', async () => {
     const embedding = new Float32Array(384).fill(0.1);
     const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
 
@@ -133,7 +133,7 @@ describe('Embedding Versioning', () => {
       embeddingModel: 'Xenova/all-MiniLM-L6-v1',
     });
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
 
     expect(stats.embeddings).toBeDefined();
     expect(stats.embeddings.currentModel).toBe(MODEL_NAME);

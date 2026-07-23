@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
+import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { execFileSync } from 'child_process';
@@ -67,19 +68,71 @@ describe('getLedgerStats', () => {
     });
   }
 
-  it('returns record counts by type', () => {
+  // Store a codebase_snapshot with the given dependency versions.
+  function seedSnapshot(deps: Record<string, string>) {
+    db.run(
+      `INSERT INTO record (id, project_id, type, content, content_text, embedding, created_at)
+       VALUES (?, ?, 'codebase_snapshot', ?, 'snapshot', ?, ?)`,
+      [
+        'snap-1',
+        PROJECT_ID,
+        JSON.stringify({ files: [], dependencies: deps, file_count: 0 }),
+        DUMMY_EMBEDDING,
+        new Date().toISOString(),
+      ],
+    );
+  }
+
+  function writePkg(deps: Record<string, string>) {
+    writeFileSync(
+      join(testDir, 'package.json'),
+      JSON.stringify({ name: 'test', dependencies: deps }, null, 2),
+    );
+  }
+
+  it('staleCount reflects a dynamically stale record when the codebase changed', async () => {
+    // left-pad moved 1.0 -> 2.0 in package.json vs the stored snapshot, and a
+    // framework_fix mentions left-pad → it is live-stale.
+    writePkg({ 'left-pad': '^2.0.0' });
+    seedSnapshot({ 'left-pad': '^1.0.0' });
+    insertTestRecord('Pinned left-pad after the breaking 2.0 upgrade', 'framework_fix');
+
+    const stats = await getLedgerStats(db, testDir);
+    expect(stats.staleness.staleCount).toBe(1);
+  });
+
+  it('staleCount is 0 when nothing is dynamically stale', async () => {
+    // Snapshot deps match current deps → no dependency change → nothing stale.
+    writePkg({ 'left-pad': '^1.0.0' });
+    seedSnapshot({ 'left-pad': '^1.0.0' });
+    insertTestRecord('Pinned left-pad after the breaking 2.0 upgrade', 'framework_fix');
+
+    const stats = await getLedgerStats(db, testDir);
+    expect(stats.staleness.staleCount).toBe(0);
+  });
+
+  it('staleCount is 0 (no crash) when no codebase snapshot exists', async () => {
+    writePkg({ 'left-pad': '^2.0.0' });
+    // no snapshot seeded — staleness is legitimately unknown/zero, never an error
+    insertTestRecord('Pinned left-pad after the breaking 2.0 upgrade', 'framework_fix');
+
+    const stats = await getLedgerStats(db, testDir);
+    expect(stats.staleness.staleCount).toBe(0);
+  });
+
+  it('returns record counts by type', async () => {
     insertTestRecord('Decision A');
     insertTestRecord('Decision B');
     insertTestRecord('Fix C', 'framework_fix');
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.records.total).toBe(3);
     expect(stats.records.active).toBe(3);
     expect(stats.records.byType['decision']).toBe(2);
     expect(stats.records.byType['framework_fix']).toBe(1);
   });
 
-  it('returns retracted and archived counts', () => {
+  it('returns retracted and archived counts', async () => {
     const r1 = insertTestRecord('Decision to retract');
     const r2 = insertTestRecord('Decision to archive');
     insertTestRecord('Decision to keep');
@@ -87,20 +140,20 @@ describe('getLedgerStats', () => {
     retractRecord(db, r1.id, 'Wrong');
     archiveRecord(db, r2.id);
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.records.total).toBe(3);
     expect(stats.records.active).toBe(1);
     expect(stats.records.retracted).toBe(1);
     expect(stats.records.archived).toBe(1);
   });
 
-  it('returns session count', () => {
-    const stats = getLedgerStats(db);
+  it('returns session count', async () => {
+    const stats = await getLedgerStats(db);
     expect(stats.sessions.total).toBe(0);
     expect(stats.sessions.lastSessionAt).toBeNull();
   });
 
-  it('returns contradiction count', () => {
+  it('returns contradiction count', async () => {
     const r1 = insertTestRecord('Auth: use JWT');
     const r2 = insertTestRecord('Auth: use sessions');
 
@@ -110,11 +163,11 @@ describe('getLedgerStats', () => {
       [r1.id, r2.id, new Date().toISOString()],
     );
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.contradictions.unresolvedCount).toBe(1);
   });
 
-  it('returns graph connection count', () => {
+  it('returns graph connection count', async () => {
     const r1 = insertTestRecord('Decision X');
     const r2 = insertTestRecord('Decision Y');
 
@@ -124,11 +177,11 @@ describe('getLedgerStats', () => {
       [r1.id, r2.id, new Date().toISOString()],
     );
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.graph.connectionCount).toBe(1);
   });
 
-  it('returns most connected record', () => {
+  it('returns most connected record', async () => {
     const r1 = insertTestRecord('Hub record');
     const r2 = insertTestRecord('Spoke A');
     const r3 = insertTestRecord('Spoke B');
@@ -144,35 +197,35 @@ describe('getLedgerStats', () => {
       [r1.id, r3.id, new Date().toISOString()],
     );
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.mostConnected).not.toBeNull();
     expect(stats.mostConnected!.id).toBe(r1.id);
     expect(stats.mostConnected!.connectionCount).toBe(2);
   });
 
-  it('returns age stats', () => {
+  it('returns age stats', async () => {
     insertTestRecord('First record');
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.age.oldestRecord).not.toBeNull();
     expect(stats.age.newestRecord).not.toBeNull();
   });
 
-  it('returns null for age when no records', () => {
-    const stats = getLedgerStats(db);
+  it('returns null for age when no records', async () => {
+    const stats = await getLedgerStats(db);
     expect(stats.age.oldestRecord).toBeNull();
     expect(stats.age.newestRecord).toBeNull();
     expect(stats.mostConnected).toBeNull();
   });
 
-  it('returns engagement with zero sessions', () => {
-    const stats = getLedgerStats(db);
+  it('returns engagement with zero sessions', async () => {
+    const stats = await getLedgerStats(db);
     expect(stats.engagement.sessionNumber).toBe(0);
     expect(stats.engagement.avgDaysBetween).toBeNull();
     expect(stats.engagement.currentStreakWeeks).toBe(0);
   });
 
-  it('computes engagement metrics from multiple sessions', () => {
+  it('computes engagement metrics from multiple sessions', async () => {
     const now = new Date();
     // Insert 4 sessions over 9 days, newest today — the current week must
     // contain a session or currentStreakWeeks is legitimately 0 (a newest
@@ -185,7 +238,7 @@ describe('getLedgerStats', () => {
       );
     }
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.engagement.sessionNumber).toBe(4);
     expect(stats.engagement.avgDaysBetween).toBeGreaterThan(0);
     expect(stats.engagement.medianDaysBetween).toBeGreaterThan(0);
@@ -194,7 +247,7 @@ describe('getLedgerStats', () => {
     expect(stats.engagement.currentStreakWeeks).toBeGreaterThanOrEqual(1);
   });
 
-  it('computes time to session 3', () => {
+  it('computes time to session 3', async () => {
     const now = new Date();
     // Session 1: 20 days ago, Session 2: 15 days ago, Session 3: 5 days ago
     const dates = [20, 15, 5];
@@ -206,7 +259,7 @@ describe('getLedgerStats', () => {
       );
     }
 
-    const stats = getLedgerStats(db);
+    const stats = await getLedgerStats(db);
     expect(stats.engagement.timeToSession3Days).toBeCloseTo(15, 0);
   });
 });
@@ -223,7 +276,7 @@ describe('memnant stats CLI', () => {
     await rm(testDir, { recursive: true, force: true });
   });
 
-  it('prints stats dashboard', () => {
+  it('prints stats dashboard', async () => {
     const result = runMemnant(['stats'], testDir);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('memnant stats');
@@ -232,7 +285,7 @@ describe('memnant stats CLI', () => {
     expect(result.stdout).toContain('Health:');
   });
 
-  it('--json outputs valid JSON with engagement', () => {
+  it('--json outputs valid JSON with engagement', async () => {
     const result = runMemnant(['stats', '--json'], testDir);
     expect(result.status).toBe(0);
     const data = JSON.parse(result.stdout);

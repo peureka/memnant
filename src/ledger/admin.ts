@@ -8,6 +8,7 @@
  */
 
 import type { Database } from './database.js';
+import { computeLiveStaleRecordIds } from '../context/compile.js';
 
 /**
  * Retract a record — mark it as withdrawn with a reason.
@@ -123,31 +124,40 @@ export function archiveSuperseded(db: Database): number {
 }
 
 /**
- * Archive records that have a staleness marker AND were created more than
+ * Archive records that are dynamically stale AND were created more than
  * `days` days ago. Skips records that are already archived.
- * Returns the number of records archived.
+ *
+ * Staleness is computed live (file-hash + semantic + AST) via the same path
+ * recall/compile use — it is never read from a persisted marker, which would
+ * drift the instant a file changed. Requires a project root and a codebase
+ * snapshot to diff against; without a project root nothing is stale and 0 is
+ * returned. Returns the number of records archived.
  */
-export function archiveStaleOlderThan(db: Database, days: number): number {
+export async function archiveStaleOlderThan(
+  db: Database,
+  days: number,
+  projectRoot?: string,
+): Promise<number> {
+  if (!projectRoot) return 0;
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffISO = cutoff.toISOString();
 
-  const result = db.get(`
-    SELECT COUNT(*) as count FROM record
-    WHERE staleness_marker IS NOT NULL
-      AND created_at < ?
-      AND archived_at IS NULL
-  `, [cutoffISO]) as unknown as { count: number };
-
-  if (result.count === 0) return 0;
+  const staleIds = await computeLiveStaleRecordIds(db, projectRoot);
+  if (staleIds.size === 0) return 0;
 
   const now = new Date().toISOString();
-  db.run(`
-    UPDATE record SET archived_at = ?
-    WHERE staleness_marker IS NOT NULL
-      AND created_at < ?
-      AND archived_at IS NULL
-  `, [now, cutoffISO]);
+  let archived = 0;
+  for (const id of staleIds) {
+    const row = db.get(
+      'SELECT id FROM record WHERE id = ? AND created_at < ? AND archived_at IS NULL',
+      [id, cutoffISO],
+    ) as unknown as { id: string } | undefined;
+    if (!row) continue;
+    db.run('UPDATE record SET archived_at = ? WHERE id = ?', [now, id]);
+    archived++;
+  }
 
-  return result.count;
+  return archived;
 }
