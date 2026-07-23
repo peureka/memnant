@@ -45,7 +45,7 @@ export function registerStatsCommand(program: Command): void {
       const db = openDatabase(dbPath);
       let stats: LedgerStats;
       try {
-        stats = getLedgerStats(db);
+        stats = await getLedgerStats(db, projectRoot);
       } finally {
         db.close();
       }

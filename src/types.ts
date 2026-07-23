@@ -38,6 +38,7 @@ export interface Record {
   related_records: string[];
   created_at: string;
   source_session: string | null;
+  /** Unused; dynamic staleness (see computeLiveStaleRecordIds) supersedes it. Vestigial, always null. */
   staleness_marker: object | null;
   retracted_at: string | null;
   retracted_reason: string | null;

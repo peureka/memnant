@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS record (
   related_records TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   source_session TEXT REFERENCES session(id),
-  staleness_marker TEXT,
+  staleness_marker TEXT, -- unused; dynamic staleness (compile.ts) supersedes it. Vestigial, never written.
   retracted_at TEXT,
   retracted_reason TEXT,
   archived_at TEXT,

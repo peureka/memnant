@@ -703,6 +703,29 @@ export async function computeAstStaleRecordIds(db: Database, projectRoot: string
   return staleIds;
 }
 
+/**
+ * Compute the set of currently-stale record IDs using the same live staleness
+ * path recall/compile use: file-hash + semantic staleness (decisions and
+ * framework fixes) unioned with AST-anchored structural staleness. This is the
+ * single source of truth for "is this record stale right now" — nothing is
+ * persisted, so the answer can never drift out of sync with the codebase.
+ *
+ * Returns an empty set when there is no snapshot to diff against or nothing
+ * changed: staleness is legitimately zero/unknown, never an error.
+ */
+export async function computeLiveStaleRecordIds(
+  db: Database,
+  projectRoot: string,
+): Promise<Set<string>> {
+  const staleMap = await computeStaleRecordIds(db, projectRoot);
+  const ids = new Set<string>(staleMap.keys());
+
+  const astStaleIds = await computeAstStaleRecordIds(db, projectRoot);
+  for (const id of astStaleIds) ids.add(id);
+
+  return ids;
+}
+
 export function formatContextAsMarkdown(ctx: CompiledContext): string {
   const parts: string[] = [];
 
