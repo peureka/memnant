@@ -27,6 +27,8 @@ First run creates your config, ledger, and auto-registers the MCP server for you
 
 That's it. The agent logs decisions silently as you work. Start your next session with full context.
 
+Setup also installs a Claude Code `SessionStart` hook, so launching Claude Code in an initialised project starts a memnant session for you. Run `memnant setup claude-code --auto-init` if you also want the hook to `memnant init` git repos that have no ledger yet. (POSIX shells only for now; the hook is skipped on Windows.)
+
 ### Manual MCP config
 
 If auto-registration doesn't work for your setup, add memnant to your agent's MCP config:
