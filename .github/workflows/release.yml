@@ -50,10 +50,11 @@ jobs:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted publishing (OIDC) needs npm >= 11.5.1. Pin the npm major:
-      # npm@latest broke this job when npm 12 dropped node 20 support.
+      # Trusted publishing (OIDC) needs npm >= 11.5.1. Pin npm 11: npm 12
+      # dropped node 20 AND skips install scripts by default, which leaves
+      # sharp without its native binary and fails the prepublish test gate.
       - name: Update npm
-        run: npm install -g npm@12
+        run: npm install -g npm@11
 
       - name: Install dependencies
         run: npm ci
