@@ -25,7 +25,12 @@ function getProjectInfo(): { name: string; dbPath: string } | null {
   }
 }
 
-function getMcpServerConfig(): { command: string; args: string[] } {
+/**
+ * How every agent config is told to launch the MCP server. Exported so the
+ * Claude Code plugin's static `.mcp.json` can be asserted against it — that
+ * file is hand-written and would otherwise drift from this silently.
+ */
+export function getMcpServerConfig(): { command: string; args: string[] } {
   return {
     command: 'npx',
     args: ['-y', 'memnant', 'serve'],

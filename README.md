@@ -29,6 +29,15 @@ That's it. The agent logs decisions silently as you work. Start your next sessio
 
 Setup also installs a Claude Code `SessionStart` hook, so launching Claude Code in an initialised project starts a memnant session for you. Run `memnant setup claude-code --auto-init` if you also want the hook to `memnant init` git repos that have no ledger yet. (POSIX shells only for now; the hook is skipped on Windows.)
 
+### Install as a Claude Code plugin
+
+```
+/plugin marketplace add peureka/memnant
+/plugin install memnant@memnant
+```
+
+That registers the MCP server and the `SessionStart` hook in one step, so you don't need `memnant setup claude-code`. Running both is harmless: the hook only starts a session when there isn't one already, and `memnant session start` refuses a second concurrent session.
+
 ### Manual MCP config
 
 If auto-registration doesn't work for your setup, add memnant to your agent's MCP config:

@@ -1,0 +1,8 @@
+{
+  "name": "memnant",
+  "description": "Institutional memory for agent-operated products — MCP tools plus auto-started sessions.",
+  "author": {
+    "name": "PJ Roch"
+  },
+  "homepage": "https://github.com/peureka/memnant"
+}
