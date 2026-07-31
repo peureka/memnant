@@ -11,6 +11,7 @@ import { execFileSync } from 'child_process';
 import { homedir } from 'os';
 import * as TOML from 'smol-toml';
 import { claudeCodeInstructions } from './instructions.js';
+import { installClaudeSessionHook } from './session-hook.js';
 import { loadConfig, findProjectRoot } from '../config/load.js';
 
 function getProjectInfo(): { name: string; dbPath: string } | null {
@@ -54,7 +55,7 @@ export function injectClaudeMdInstructions(): void {
   }
 }
 
-export function setupClaudeCode(): void {
+export function setupClaudeCode(options: { autoInit?: boolean } = {}): void {
   const home = homedir();
   const serverConfig = getMcpServerConfig();
 
@@ -129,6 +130,7 @@ export function setupClaudeCode(): void {
     return;
   }
   console.log('memnant MCP server registered for Claude Code in this project.');
+  installClaudeSessionHook({ autoInit: options.autoInit });
   injectClaudeMdInstructions();
   warnIfNotInitialised();
 }
@@ -253,7 +255,11 @@ export function registerSetupCommand(program: Command): void {
   setup
     .command('claude-code')
     .description('Register memnant in Claude Code (~/.claude.json)')
-    .action(setupClaudeCode);
+    .option(
+      '--auto-init',
+      'Session hook also runs `memnant init` in git repos that have no ledger yet',
+    )
+    .action((options: { autoInit?: boolean }) => setupClaudeCode({ autoInit: options.autoInit }));
 
   setup
     .command('codex')
