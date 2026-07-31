@@ -1,0 +1,14 @@
+{
+  "name": "memnant",
+  "owner": {
+    "name": "PJ Roch",
+    "url": "https://github.com/peureka"
+  },
+  "plugins": [
+    {
+      "name": "memnant",
+      "source": "./claude-plugin",
+      "description": "Institutional memory for agent-operated products — MCP tools plus auto-started sessions."
+    }
+  ]
+}

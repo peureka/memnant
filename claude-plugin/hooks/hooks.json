@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y memnant session status 2>/dev/null | grep -q \"No active session\" && npx -y memnant session start >/dev/null 2>&1 || true",
+            "async": true,
+            "timeout": 600,
+            "statusMessage": "Starting memnant session"
+          }
+        ]
+      }
+    ]
+  }
+}
