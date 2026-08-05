@@ -71,6 +71,17 @@ function slugify(text: string): string {
   return slug || 'session';
 }
 
+/** A standalone "Goal:" label at the start of a line. */
+const GOAL_LABEL_RE = /^#*\s*goal\s*:\s*/i;
+
+/**
+ * A section label starting a line in a labeled multi-line log
+ * ("Done:", "Decided:", "Tests: none added"). These are structure, not
+ * content — they never render as Done bullets.
+ */
+const SECTION_LABEL_RE =
+  /^#*\s*(goal|done|shipped|decisions|decided|tests(\s+added)?|rejected|gotchas)\s*:/i;
+
 /** Inline section markers used by legacy single-line summaries. */
 const INLINE_MARKERS = 'Shipped|Decisions|Rejected|Gotchas|TODOs|Deferred|Next';
 
@@ -151,10 +162,19 @@ function isTrailingSection(line: string): boolean {
  */
 function splitBullets(text: string): string[] {
   const bullets: string[] = [];
+  let inSkippedSection = false;
   for (const raw of text.split('\n')) {
     if (isTrailingSection(raw)) break;
     const line = raw.trim();
     if (!line) continue;
+    const label = line.match(SECTION_LABEL_RE);
+    if (label) {
+      // Labels are structure, not content. Only Done/Shipped section content
+      // belongs in Done; other sections render elsewhere or not at all.
+      inSkippedSection = !/^(done|shipped)$/i.test(label[1]);
+      continue;
+    }
+    if (inSkippedSection) continue;
     bullets.push(line.replace(/^[-*•]\s*/, ''));
   }
   if (bullets.length === 0 && text.trim()) return [text.trim()];
@@ -300,7 +320,7 @@ function renderMarkdown(params: {
 
   const goal = inline
     ? firstSentence(parseInlineSegments(summary.trim()).pre)
-    : firstLine(summary);
+    : firstLine(summary).replace(GOAL_LABEL_RE, '');
   if (goal) parts.push(`**Goal**: ${goal}`);
 
   // Done: every session_log record content, split into bullets.
@@ -449,7 +469,12 @@ export function registerExportSessionCommand(program: Command): void {
 
           // ── Compute filename ─────────────────────────────────────────
           const date = localDate(session.closed_at as string);
-          const slug = opts.slug ? slugify(opts.slug) : slugify(firstLine(summary) || `session ${session.id.slice(0, 8)}`);
+          const slug = opts.slug
+            ? slugify(opts.slug)
+            : slugify(
+                firstLine(summary).replace(GOAL_LABEL_RE, '') ||
+                  `session ${session.id.slice(0, 8)}`,
+              );
 
           const outDir = opts.out
             ? isAbsolute(opts.out)

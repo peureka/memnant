@@ -470,3 +470,78 @@ describe('memnant export-session', { timeout: 180_000 }, () => {
     await rm(dir, { recursive: true, force: true });
   });
 });
+
+/**
+ * Round 2 (backlog 2026-08-05): session logs written with standalone section
+ * labels (Goal:/Done:/Decided:/Tests:/Next: on their own lines) must parse as
+ * sections, not flatten into Done bullets with the goal duplicated.
+ */
+describe('memnant export-session — standalone-labeled logs', { timeout: 180_000 }, () => {
+  const LABELED_LOG = [
+    'Goal: Reposition the project docs.',
+    '',
+    'Done:',
+    '- Rewrote the README opening.',
+    '- Updated the site copy.',
+    '',
+    'Decided:',
+    '- Positioning: decision ledger, not memory.',
+    '',
+    'Tests: none added; copy-only change.',
+    '',
+    'Next: archive the old repo.',
+  ].join('\n');
+
+  let labeledDir: string;
+
+  beforeAll(async () => {
+    labeledDir = await mkdtemp(join(tmpdir(), 'memnant-export-session-labeled-'));
+    runMemnant(['init'], labeledDir);
+    seedClosedSession(labeledDir, { log: LABELED_LOG });
+  }, 180_000);
+
+  afterAll(async () => {
+    await rm(labeledDir, { recursive: true, force: true });
+  });
+
+  it('strips the Goal label and does not duplicate the goal into Done', async () => {
+    const result = runMemnant(['export-session', '--latest', '--force'], labeledDir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('**Goal**: Reposition the project docs.');
+    expect(md).not.toContain('**Goal**: Goal:');
+    expect(md).not.toContain('- Goal: Reposition the project docs.');
+  });
+
+  it('does not render standalone section labels as Done bullets', async () => {
+    const result = runMemnant(['export-session', '--latest', '--force'], labeledDir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).not.toContain('- Done:');
+    expect(md).not.toContain('- Decided:');
+    expect(md).not.toContain('- Tests:');
+  });
+
+  it('takes Done bullets from the Done section only; Next still renders', async () => {
+    const result = runMemnant(['export-session', '--latest', '--force'], labeledDir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('- Rewrote the README opening.');
+    expect(md).toContain('- Updated the site copy.');
+    // Decided/Tests section content is not Done work.
+    expect(md).not.toContain('- Positioning: decision ledger, not memory.');
+    expect(md).not.toContain('none added; copy-only change');
+    expect(md).toContain('**Next**: archive the old repo.');
+  });
+
+  it('derives the filename slug from the goal, not the Goal label', async () => {
+    const result = runMemnant(['export-session', '--latest', '--force'], labeledDir);
+    expect(result.status).toBe(0);
+
+    const written = result.stdout.trim();
+    expect(written).toMatch(/\d{4}-\d{2}-\d{2}-reposition-the-project-docs\.md$/);
+  });
+});
