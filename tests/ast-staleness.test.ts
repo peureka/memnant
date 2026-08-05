@@ -17,6 +17,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import pkg from 'node-sqlite3-wasm';
+import { CURRENT_SCHEMA_VERSION } from '../src/ledger/database.js';
 const { Database } = pkg;
 import { readFileSync } from 'fs';
 import yaml from 'js-yaml';
@@ -76,12 +77,12 @@ describe('schema migration v4', { timeout: 120_000 }, () => {
     db.close();
   });
 
-  it('schema version is 11', () => {
+  it('schema version is current', () => {
     const db = openDb(testDir);
     const row = db.get('SELECT MAX(version) as version FROM schema_version') as unknown as {
       version: number;
     };
-    expect(row.version).toBe(12);
+    expect(row.version).toBe(CURRENT_SCHEMA_VERSION);
     db.close();
   });
 });

@@ -9,7 +9,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createDatabase, openDatabase, type Database } from '../src/ledger/database.js';
+import { createDatabase, openDatabase, CURRENT_SCHEMA_VERSION, type Database } from '../src/ledger/database.js';
 import { insertRecord } from '../src/ledger/records.js';
 import { retractRecord, unretractRecord, archiveRecord, unarchiveRecord } from '../src/ledger/admin.js';
 import { getLedgerStats } from '../src/ledger/stats.js';
@@ -211,7 +211,7 @@ describe('Ledger Administration Integration', () => {
 
     // Verify schema_version is 9 (migrated through v3, v4, v5, v6, v7, v8, and v9)
     const versionRow = migratedDb.get('SELECT MAX(version) as version FROM schema_version') as unknown as { version: number };
-    expect(versionRow.version).toBe(12);
+    expect(versionRow.version).toBe(CURRENT_SCHEMA_VERSION);
 
     // Verify v4 columns exist (AST-anchored staleness)
     const v4Row = migratedDb.get(

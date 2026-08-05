@@ -127,7 +127,6 @@ describe('colony promotion', () => {
       related_records: [],
       created_at: new Date().toISOString(),
       source_session: null,
-      staleness_marker: null,
       retracted_at: null,
       retracted_reason: null,
       archived_at: null,

@@ -12,7 +12,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createDatabase, openDatabase, type Database } from '../src/ledger/database.js';
+import { createDatabase, openDatabase, CURRENT_SCHEMA_VERSION, type Database } from '../src/ledger/database.js';
 
 describe('Migration Registry', () => {
   let testDir: string;
@@ -90,7 +90,7 @@ describe('Migration Registry', () => {
 
     // Check schema_version is now 8
     const row = db2.get('SELECT MAX(version) as version FROM schema_version') as unknown as { version: number };
-    expect(row.version).toBe(12);
+    expect(row.version).toBe(CURRENT_SCHEMA_VERSION);
 
     // Check the v3 columns exist
     const tableInfo = db2.all('PRAGMA table_info(record)') as unknown as Array<{ name: string }>;
@@ -152,7 +152,7 @@ describe('Migration Registry', () => {
     const db2 = openDatabase(dbPath);
 
     const row = db2.get('SELECT MAX(version) as version FROM schema_version') as unknown as { version: number };
-    expect(row.version).toBe(12);
+    expect(row.version).toBe(CURRENT_SCHEMA_VERSION);
 
     const tableInfo = db2.all('PRAGMA table_info(record)') as unknown as Array<{ name: string; dflt_value: string | null }>;
     const embeddingModelCol = tableInfo.find((col) => col.name === 'embedding_model');
@@ -196,7 +196,7 @@ describe('Migration Registry', () => {
 
     const db2 = openDatabase(dbPath);
     const row = db2.get('SELECT MAX(version) as version FROM schema_version') as unknown as { version: number };
-    expect(row.version).toBe(12);
+    expect(row.version).toBe(CURRENT_SCHEMA_VERSION);
 
     const tableInfo = db2.all('PRAGMA table_info(context_event)') as unknown as Array<{ name: string }>;
     const columnNames = tableInfo.map((col) => col.name);

@@ -73,7 +73,6 @@ export function insertRecord(db: Database, params: InsertRecordParams): Record {
     related_records: params.relatedRecords ?? [],
     created_at: createdAt,
     source_session: params.sourceSession ?? null,
-    staleness_marker: null,
     retracted_at: null,
     retracted_reason: null,
     archived_at: null,

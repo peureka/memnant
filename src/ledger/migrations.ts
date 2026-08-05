@@ -12,6 +12,8 @@ export interface Migration {
   version: number;
   description: string;
   up: (db: Database) => void;
+  /** Reverses `up`. Optional: only migrations since v13 are reversible. */
+  down?: (db: Database) => void;
 }
 
 export const MIGRATIONS: Migration[] = [
@@ -126,6 +128,16 @@ export const MIGRATIONS: Migration[] = [
     description: 'Add confirmation_count for colony recruitment',
     up: (db) => {
       db.run('ALTER TABLE record ADD COLUMN confirmation_count INTEGER NOT NULL DEFAULT 0');
+    },
+  },
+  {
+    version: 13,
+    description: 'Drop vestigial staleness_marker column (never written; dynamic staleness supersedes it)',
+    up: (db) => {
+      db.run('ALTER TABLE record DROP COLUMN staleness_marker');
+    },
+    down: (db) => {
+      db.run('ALTER TABLE record ADD COLUMN staleness_marker TEXT');
     },
   },
 ];

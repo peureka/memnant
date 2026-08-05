@@ -70,7 +70,6 @@ export async function promoteRecordById(
     related_records: JSON.parse(row.related_records || '[]'),
     created_at: row.created_at,
     source_session: row.source_session,
-    staleness_marker: row.staleness_marker ? JSON.parse(row.staleness_marker) : null,
     retracted_at: row.retracted_at,
     retracted_reason: row.retracted_reason,
     archived_at: row.archived_at,

@@ -36,7 +36,6 @@ CREATE TABLE IF NOT EXISTS record (
   related_records TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   source_session TEXT REFERENCES session(id),
-  staleness_marker TEXT, -- unused; dynamic staleness (compile.ts) supersedes it. Vestigial, never written.
   retracted_at TEXT,
   retracted_reason TEXT,
   archived_at TEXT,
@@ -106,7 +105,11 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 `;
 
-const CURRENT_SCHEMA_VERSION = 12;
+/** Latest schema version, derived from the registry so it can never go stale. */
+export const CURRENT_SCHEMA_VERSION = MIGRATIONS.reduce(
+  (max, m) => Math.max(max, m.version),
+  2, // v2 is the pre-registry baseline schema
+);
 
 /**
  * Run schema migrations for existing databases.
@@ -239,6 +242,46 @@ CREATE INDEX IF NOT EXISTS idx_record_access_record_id ON record_access(record_i
 CREATE INDEX IF NOT EXISTS idx_record_access_session_id ON record_access(context);
 CREATE INDEX IF NOT EXISTS idx_context_event_session_id ON context_event(session_id);
 `;
+
+/**
+ * Walk the schema back down to `targetVersion` using registry `down`
+ * migrations, newest first. Internal recovery/testing tool — not exposed on
+ * the CLI; the auto-backup taken before up-migrations is the user-facing
+ * safety net. Throws if any migration in the span has no `down`.
+ */
+export function migrateDown(db: Database, targetVersion: number): void {
+  const currentRow = db.get('SELECT MAX(version) AS v FROM schema_version') as unknown as
+    | { v: number | null }
+    | undefined;
+  const current = currentRow?.v ?? 0;
+  if (targetVersion >= current) return;
+
+  const span = MIGRATIONS.filter(
+    (m) => m.version > targetVersion && m.version <= current,
+  ).sort((a, b) => b.version - a.version);
+
+  const irreversible = span.find((m) => !m.down);
+  if (irreversible) {
+    throw new Error(
+      `Cannot migrate down past v${irreversible.version} ('${irreversible.description}'): it has no down migration.`,
+    );
+  }
+
+  for (const migration of span) {
+    db.run('BEGIN');
+    try {
+      migration.down!(db);
+      db.run('DELETE FROM schema_version WHERE version >= ?', [migration.version]);
+      db.run('INSERT OR REPLACE INTO schema_version (version) VALUES (?)', [
+        migration.version - 1,
+      ]);
+      db.run('COMMIT');
+    } catch (err) {
+      db.run('ROLLBACK');
+      throw err;
+    }
+  }
+}
 
 export function createDatabase(dbPath: string): Database {
   mkdirSync(dirname(dbPath), { recursive: true });
