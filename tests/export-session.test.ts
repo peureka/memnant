@@ -531,10 +531,44 @@ describe('memnant export-session — standalone-labeled logs', { timeout: 180_00
 
     expect(md).toContain('- Rewrote the README opening.');
     expect(md).toContain('- Updated the site copy.');
-    // Decided/Tests section content is not Done work.
-    expect(md).not.toContain('- Positioning: decision ledger, not memory.');
-    expect(md).not.toContain('none added; copy-only change');
+    // Decided/Tests section content is not Done work (scoped to the Done
+    // block: the Decided line may legitimately appear under **Decisions**).
+    const doneBlock = md.split('**Done**:')[1].split('\n\n')[0];
+    expect(doneBlock).not.toContain('Positioning: decision ledger, not memory.');
+    expect(doneBlock).not.toContain('none added; copy-only change');
     expect(md).toContain('**Next**: archive the old repo.');
+  });
+
+  it('falls back to the log Decided section for Decisions when the session has no decision records', async () => {
+    const result = runMemnant(['export-session', '--latest', '--force'], labeledDir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('**Decisions**:');
+    expect(md).toContain('- Positioning: decision ledger, not memory.');
+  });
+
+  it('decision records win over the log Decided section', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'memnant-export-session-decwin-'));
+    runMemnant(['init'], dir);
+    seedClosedSession(dir, {
+      decisions: [
+        {
+          content:
+            'Chose the decision ledger positioning over memory language. Full rationale in the ledger.',
+        },
+      ],
+      log: LABELED_LOG,
+    });
+
+    const result = runMemnant(['export-session', '--latest'], dir);
+    expect(result.status).toBe(0);
+    const md = await readFile(result.stdout.trim(), 'utf-8');
+
+    expect(md).toContain('- Chose the decision ledger positioning over memory language.');
+    expect(md).not.toContain('- Positioning: decision ledger, not memory.');
+
+    await rm(dir, { recursive: true, force: true });
   });
 
   it('derives the filename slug from the goal, not the Goal label', async () => {

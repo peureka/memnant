@@ -195,6 +195,31 @@ function logToDoneBullets(content: string): string[] {
   return splitBullets(content);
 }
 
+/**
+ * Bullet lines of a Decided:/Decisions: section in a labeled log. Used as the
+ * **Decisions** fallback when the session has no decision records — otherwise
+ * decisions logged only in the closing summary vanish from the export.
+ */
+function parseLogDecisions(summary: string): string[] {
+  const out: string[] = [];
+  let capturing = false;
+  for (const raw of summary.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (isTrailingSection(line)) {
+      if (capturing) break;
+      continue;
+    }
+    const label = line.match(SECTION_LABEL_RE);
+    if (label) {
+      capturing = /^(decisions|decided)$/i.test(label[1]);
+      continue;
+    }
+    if (capturing) out.push(line.replace(/^[-*•]\s*/, ''));
+  }
+  return out;
+}
+
 /** Lines under a "TODOs:" or "Deferred:" heading, until the next heading/blank. */
 function parseDeferred(summary: string): string[] {
   const lines = summary.split('\n');
@@ -341,6 +366,13 @@ function renderMarkdown(params: {
       return `- ${body}${rejected}`;
     });
     parts.push(['**Decisions**:', ...bullets].join('\n'));
+  } else if (!inline) {
+    // No decision records: fall back to the log's own Decided:/Decisions:
+    // section so summary-only decisions still appear in the export.
+    const logDecisions = parseLogDecisions(summary);
+    if (logDecisions.length > 0) {
+      parts.push(['**Decisions**:', ...logDecisions.map((d) => `- ${d}`)].join('\n'));
+    }
   }
 
   if (fixes.length > 0) {
