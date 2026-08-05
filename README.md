@@ -163,7 +163,7 @@ Last import: 2026-03-04T14:22:00Z
 
 **Team layer.** Shared understanding across builders. Git-native sync, contradiction detection, builder-filtered recall, onboarding briefs, and team pattern analysis.
 
-**Ant behaviours.** Knowledge that compounds with use. Pheromone trails boost records accessed together: "you always look at these two decisions side by side." Stigmergy detects when a teammate logs something for a file you're working on and surfaces it immediately. Colony patterns confirmed by 3+ projects recruit themselves into every session. Decision churn alerts flag topics superseded 3+ times.
+**Ant behaviours.** Knowledge that compounds with use. Pheromone trails boost records accessed together: "you always look at these two decisions side by side." Stigmergy detects when a teammate logs something for a file you're working on and surfaces it immediately. Colony patterns confirmed by 3+ projects recruit themselves into every session. Decision churn alerts flag topics superseded 3+ times; the underlying tension needs resolving, not another revision.
 
 ## Why not just CLAUDE.md?
 
