@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>memnant: it just remembers</title>
-  <meta name="description" content="A small persistent thing that crawls across your projects and carries what you decided from one place to the next. Decisions, fixes, patterns: the remnant that survives after context windows die.">
+  <meta name="description" content="memnant is a local-first decision ledger for agentic development: it tracks supersession, scores staleness semantically, and flags contradictions between decisions. Memory is what happened; memnant maintains what is still true.">
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%23050505'/><rect x='20' y='35' width='12' height='12' rx='2' fill='%23c8ff00'/><rect x='44' y='35' width='12' height='12' rx='2' fill='%23c8ff00' opacity='.6'/><rect x='68' y='35' width='12' height='12' rx='2' fill='%23c8ff00' opacity='.3'/><rect x='20' y='55' width='60' height='3' rx='1' fill='%23333'/></svg>">
@@ -12,13 +12,13 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="memnant: it just remembers">
-  <meta property="og:description" content="A small persistent thing that crawls across your projects and carries what you decided from one place to the next. Decisions, fixes, patterns: the remnant that survives after context windows die.">
+  <meta property="og:description" content="memnant is a local-first decision ledger for agentic development: it tracks supersession, scores staleness semantically, and flags contradictions between decisions. Memory is what happened; memnant maintains what is still true.">
   <meta property="og:url" content="https://memnant.com">
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="memnant: it just remembers">
-  <meta name="twitter:description" content="A small persistent thing that crawls across your projects and carries what you decided from one place to the next. Decisions, fixes, patterns: the remnant that survives after context windows die.">
+  <meta name="twitter:description" content="memnant is a local-first decision ledger for agentic development: it tracks supersession, scores staleness semantically, and flags contradictions between decisions. Memory is what happened; memnant maintains what is still true.">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -471,15 +471,15 @@
 
   <section class="statement">
     <p class="reveal">
-      Context windows die. Conversations end. Three weeks later
-      you're re-explaining the same decisions to the same agent.
-      <em>memnant is the remnant that survives.</em>
+      Memory is what happened; institutional knowledge is what
+      is still true. Every agent remembers now.
+      <em>memnant knows the difference.</em>
     </p>
   </section>
 
   <section class="core-features" id="core">
     <div class="section-header reveal">
-      <span class="section-number">01-05</span>
+      <span class="section-number">01-06</span>
       <span class="section-title">The core loop</span>
     </div>
 
@@ -489,7 +489,7 @@
         <div class="core-feature-name">It<br>remembers.</div>
       </div>
       <div class="core-feature-right">
-        <p class="core-feature-desc">The agent logs silently as you work. Decisions, framework fixes, rejections, product calls. Every record gets a vector embedding for semantic search. You don't do anything, it just remembers.</p>
+        <p class="core-feature-desc">The agent logs silently as you work: decisions, framework fixes, rejections, product calls. Every record gets a vector embedding for semantic search. You never touch it.</p>
       </div>
     </div>
 
@@ -509,13 +509,23 @@
         <div class="core-feature-name">It<br>knows.</div>
       </div>
       <div class="core-feature-right">
-        <p class="core-feature-desc">It knows when knowledge goes stale. When a file changes, memnant scores whether the change actually affects related decisions. Semantic confidence, not a binary flag. A renamed variable doesn't invalidate an architecture decision.</p>
+        <p class="core-feature-desc">When a file changes, memnant scores whether the change actually affects related decisions. Semantic confidence, not a binary flag. A renamed variable doesn't invalidate an architecture decision.</p>
       </div>
     </div>
 
     <div class="core-feature reveal">
       <div class="core-feature-left">
         <span class="core-feature-index">04</span>
+        <div class="core-feature-name">It<br>supersedes.</div>
+      </div>
+      <div class="core-feature-right">
+        <p class="core-feature-desc">Decisions change. memnant never edits history: a new record supersedes the old one, and the chain stays visible. Contradictions between builders get flagged. Topics revised three or more times get a churn alert, because the underlying tension needs resolving, not another revision.</p>
+      </div>
+    </div>
+
+    <div class="core-feature reveal">
+      <div class="core-feature-left">
+        <span class="core-feature-index">05</span>
         <div class="core-feature-name">It<br>travels.</div>
       </div>
       <div class="core-feature-right">
@@ -525,7 +535,7 @@
 
     <div class="core-feature reveal">
       <div class="core-feature-left">
-        <span class="core-feature-index">05</span>
+        <span class="core-feature-index">06</span>
         <div class="core-feature-name">It<br>shares.</div>
       </div>
       <div class="core-feature-right">
@@ -554,8 +564,9 @@
       <h2>More than <em>memory.</em></h2>
     </div>
     <p class="depth-subhead reveal">
-      Remembering is the start. What makes knowledge useful is
-      how it connects, what fades, what stays, and what gets enforced.
+      Remembering is table stakes. Your agent already does it.
+      What makes knowledge trustworthy is what fades, what supersedes
+      what, and what the current answer is traceable to.
     </p>
     <div class="depth-grid reveal">
       <div class="depth-cell">
@@ -580,7 +591,7 @@
       </div>
       <div class="depth-cell">
         <div class="depth-name">Narrative briefings</div>
-        <div class="depth-desc">Session context rendered as a story, not a database dump. Template-driven offline. LLM-composed when an API key is available. Graceful fallback.</div>
+        <div class="depth-desc">Session context rendered as a story, not a database dump. Template-driven offline, LLM-composed when an API key is available, with a graceful fallback either way.</div>
       </div>
       <div class="depth-cell">
         <div class="depth-name">Team layer</div>
@@ -596,7 +607,7 @@
       </div>
       <div class="depth-cell">
         <div class="depth-name">Churn detection</div>
-        <div class="depth-desc">Spots decisions that keep getting superseded. When a topic has been revised 3+ times, memnant flags the underlying tension instead of accepting another revision.</div>
+        <div class="depth-desc">Spots decisions revisited three or more times and raises a churn alert before a fourth revision ships quietly.</div>
       </div>
       <div class="depth-cell">
         <div class="depth-name">Self-hosted models</div>
@@ -611,8 +622,8 @@
 
   <section class="statement">
     <p class="reveal">
-      Your agents forget faster than you do. A coordinator briefs a subagent,
-      it solves something hard, the branch merges, and the lesson leaves with
+      Your agents forget faster than you do. A coordinator briefs a subagent;
+      it solves something hard; the branch merges; and the lesson leaves with
       it. memnant is worktree-native: every checkout keeps its own ledger,
       converging through git in the same pull request as the code, transcripts
       harvested after the fact. <em>What the fleet learned survives the fleet.</em>
@@ -640,7 +651,7 @@
       </div>
       <div class="spec-cell">
         <div class="spec-label">Config</div>
-        <div class="spec-value"><code>memnant.yaml</code> at your project root. Version-controlled. No dashboard. No account. No login.</div>
+        <div class="spec-value"><code>memnant.yaml</code> at your project root. Version-controlled. No dashboard, no account, no login.</div>
       </div>
       <div class="spec-cell">
         <div class="spec-label">Export</div>

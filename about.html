@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>memnant: the remnant that survives</title>
-  <meta name="description" content="What memnant is, what your agent gets, and who it's for. A local SQLite ledger that knows what you decided, when, why, and whether it's still true.">
+  <meta name="description" content="What memnant is, what your agent gets, and who it's for. A local-first decision ledger that knows what you decided, when, why, what replaced it, and whether it still holds.">
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='12' fill='%23050505'/><rect x='20' y='35' width='12' height='12' rx='2' fill='%23c8ff00'/><rect x='44' y='35' width='12' height='12' rx='2' fill='%23c8ff00' opacity='.6'/><rect x='68' y='35' width='12' height='12' rx='2' fill='%23c8ff00' opacity='.3'/><rect x='20' y='55' width='60' height='3' rx='1' fill='%23333'/></svg>">
@@ -12,7 +12,7 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="memnant: the remnant that survives">
-  <meta property="og:description" content="What memnant is, what your agent gets, and who it's for. A local SQLite ledger that knows what you decided, when, why, and whether it's still true.">
+  <meta property="og:description" content="What memnant is, what your agent gets, and who it's for. A local-first decision ledger that knows what you decided, when, why, what replaced it, and whether it still holds.">
   <meta property="og:url" content="https://memnant.com/about">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -318,8 +318,10 @@
       <h1>The remnant that <em>survives.</em></h1>
       <p class="page-lead">
         mem + remnant. What's left after context windows die, conversations end,
-        and you come back three weeks later. A local SQLite ledger that knows
-        what you decided, when, why, and whether it's still true.
+        and you come back three weeks later. Memory is what happened;
+        institutional knowledge is what is still true. A local SQLite decision
+        ledger that knows what you decided, when, why, what replaced it, and
+        whether it still holds.
       </p>
     </div>
 
@@ -380,7 +382,7 @@
         </div>
         <div class="tool-item">
           <div class="tool-name">team_status</div>
-          <div class="tool-desc">Active builders, record counts per builder, unresolved contradictions, last import timestamp.</div>
+          <div class="tool-desc">Team health: active builders, record counts per builder, unresolved contradictions, last import timestamp.</div>
         </div>
         <div class="tool-item">
           <div class="tool-name">brief --onboarding</div>
@@ -392,7 +394,7 @@
         </div>
         <div class="tool-item">
           <div class="tool-name">churn detection</div>
-          <div class="tool-desc">Spots topics that keep getting revisited. When a decision has been superseded 3+ times, memnant flags the underlying tension.</div>
+          <div class="tool-desc">Spots topics that keep getting revisited. Decisions superseded 3+ times raise a churn alert.</div>
         </div>
       </div>
       <p class="tools-note">Full list on <a href="https://www.npmjs.com/package/memnant">npm</a>.</p>
@@ -401,18 +403,13 @@
     <div class="section" id="how">
       <div class="section-label">How it works</div>
       <p class="compare-intro">
-        Typed records (decisions, framework fixes, session logs) stored in an
+        Typed records (decisions, framework fixes, session logs) live in an
         append-only SQLite ledger with vector embeddings for semantic search.
-        Framework fixes auto-promote to a machine-local colony that spans all
-        your projects. When the codebase changes under a decision, memnant
-        scores whether the change actually matters: semantic confidence, not
-        a binary flag. Session starts with a narrative briefing, not a raw dump.
-        Team decisions sync through git, with cross-builder contradiction detection,
-        recall filters, and onboarding briefs. Ant-inspired behaviours compound knowledge:
-        pheromone trails boost records accessed together, stigmergy surfaces teammate updates
-        in real time, colony patterns recruit themselves across projects, and churn detection
-        flags decisions that keep getting revisited. Synthesis works with Anthropic, OpenAI,
-        or self-hosted models via Ollama. Everything runs locally.
+        Decisions are never edited: a new record supersedes the old one, and
+        the chain stays visible. When the codebase changes under a decision,
+        memnant scores whether the change actually matters: semantic confidence,
+        not a binary flag. Everything above runs locally; only synthesis calls
+        out, to Anthropic, OpenAI, or a self-hosted model via Ollama.
       </p>
     </div>
 
@@ -421,7 +418,7 @@
       <p class="audience-text">
         You work in sessions. Days or weeks apart. Across projects that share
         patterns. memnant is for builders who want what they learned <em>yesterday</em>
-        to be there <em>tomorrow.</em>
+        to be there <em>tomorrow</em>, and still <em>true.</em>
       </p>
     </div>
 

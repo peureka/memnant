@@ -56,7 +56,11 @@
     "staleness",
     "synthesis",
     "governance",
-    "mcp-server"
+    "mcp-server",
+    "decision-records",
+    "provenance",
+    "staleness-detection",
+    "institutional-knowledge"
   ],
   "license": "MIT",
   "bugs": {

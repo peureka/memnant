@@ -2,13 +2,15 @@
 
 It just remembers.
 
+Memory is what happened; institutional knowledge is what is still true. memnant maintains the second.
+
+Every agent remembers now. Claude Code has memory. Cursor has memories. Remembering was never the hard part. The hard part is that remembered decisions go stale, get superseded, and contradict each other, and a stale decision confidently injected into context is worse than a forgotten one. Memory without staleness detection gets more dangerous as it grows.
+
+memnant is a decision ledger, not a notebook: records are append-only, supersession chains form when decisions change, staleness is scored semantically as code moves underneath a decision, and contradictions are flagged between builders. Synthesis cites its sources, so the current position stays traceable to the evidence that shaped it.
+
 ## The problem
 
 Context windows die. Conversations end. Three weeks later you're re-explaining the same decisions to the same agent. The framework fix you solved in week two? Gone. The product decision from last month? Not in the context window.
-
-You forget. Your agent forgets faster.
-
-memnant is the remnant that survives. A small persistent thing that crawls across your projects and carries what you decided from one place to the next.
 
 ## Install
 
@@ -78,7 +80,7 @@ filters are still on the TODO.
 Session e8f3 started. Good building.
 ```
 
-Three weeks away from a project. One command. Full context. Colony fixes from your other projects included. If a teammate just fixed something in a file you're working on, it's already in your briefing.
+Three weeks away from a project, and one command still gives you full context. Colony fixes from your other projects are included. If a teammate just fixed something in a file you're working on, it's already in your briefing.
 
 ## How it works
 
@@ -86,7 +88,7 @@ Three weeks away from a project. One command. Full context. Colony fixes from yo
 
 **It compiles.** Next session starts with what matters. Last session's summary, open TODOs, relevant decisions, staleness warnings. Not a raw dump; the relevant subset, with what's changed since you were last here.
 
-**It knows.** It knows when knowledge goes stale. When a file changes, memnant scores whether the change actually affects related decisions. Semantic confidence, not a binary flag. A renamed variable doesn't invalidate an architecture decision.
+**It knows.** When a file changes, memnant scores whether the change actually affects related decisions. Semantic confidence, not a binary flag. A renamed variable doesn't invalidate an architecture decision.
 
 **It travels.** Knowledge crosses projects automatically. Framework fixes and rejected approaches promote themselves to a machine-local colony at `~/.memnant/colony.db`. The gotcha you solved in one codebase is already waiting in the next. No export needed.
 
@@ -161,7 +163,11 @@ Last import: 2026-03-04T14:22:00Z
 
 **Team layer.** Shared understanding across builders. Git-native sync, contradiction detection, builder-filtered recall, onboarding briefs, and team pattern analysis.
 
-**Ant behaviours.** Knowledge that compounds with use. Pheromone trails boost records accessed together: "you always look at these two decisions side by side." Stigmergy detects when a teammate logs something for a file you're working on and surfaces it immediately. Colony patterns confirmed by 3+ projects recruit themselves into every session. Decision churn alerts flag topics superseded 3+ times; the underlying tension needs resolving, not another revision.
+**Ant behaviours.** Knowledge that compounds with use. Pheromone trails boost records accessed together: "you always look at these two decisions side by side." Stigmergy detects when a teammate logs something for a file you're working on and surfaces it immediately. Colony patterns confirmed by 3+ projects recruit themselves into every session. Decision churn alerts flag topics superseded 3+ times.
+
+## Why not just CLAUDE.md?
+
+Project instruction files and native agent memory are notebooks: flat, manually curated, never invalidated. Nothing tells you the note from March is wrong now. memnant is a ledger: every record carries when it was decided, what replaced it, and a live confidence score that it still holds. When a topic gets superseded three times, memnant flags the underlying tension instead of accepting a fourth revision. Notebooks accumulate. Ledgers stay true.
 
 ## Under the hood
 
