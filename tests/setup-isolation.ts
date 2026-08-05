@@ -13,10 +13,16 @@
 import { mkdtempSync, existsSync, symlinkSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir, homedir } from 'os';
+import { reapStaleTmpDirs } from './reap-stale-tmp.js';
 
 if (!process.env.MEMNANT_TEST_ORIGINAL_HOME) {
   const originalHome = homedir();
   process.env.MEMNANT_TEST_ORIGINAL_HOME = originalHome;
+
+  // Crashed and timed-out runs leak their mkdtemp dirs (afterAll never ran);
+  // reap anything of ours older than a day before this run adds more. Live
+  // concurrent runs have fresh mtimes and are left alone.
+  reapStaleTmpDirs(tmpdir(), 'memnant-', 24 * 60 * 60 * 1000);
 
   const fakeHome = mkdtempSync(join(tmpdir(), 'memnant-test-home-'));
 
