@@ -98,6 +98,11 @@ async function runInterchangeImport(
     console.log(`${result.contradictionsFlagged} contradiction(s) flagged against existing records. Run \`memnant graph --contradictions\` to review.`);
   }
   if (dryRun) {
+    for (const record of result.records) {
+      const firstLine = record.content.split('\n')[0];
+      const preview = firstLine.length > 100 ? `${firstLine.slice(0, 100)}…` : firstLine;
+      console.log(`  [${record.type}] ${preview}`);
+    }
     console.log('Dry run — nothing was written.');
   }
 }

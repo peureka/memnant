@@ -119,6 +119,8 @@ describe('memnant import — interchange files', () => {
     const result = runMemnant(['import', '--dry-run', 'dry.json'], projectDir);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Would import 1 of 1 records');
+    expect(result.stdout).toContain('[framework_fix]');
+    expect(result.stdout).toContain('Vitest worker RPC starves');
     expect(result.stdout).toContain('Dry run — nothing was written.');
 
     const db = openDatabase(join(projectDir, '.memnant', 'ledger.db'));

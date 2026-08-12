@@ -333,4 +333,16 @@ describe('importInterchange — pre-extracted records', () => {
     const count = db.get('SELECT COUNT(*) as n FROM record') as unknown as { n: number };
     expect(count.n).toBe(0);
   }, 60000);
+
+  it('result lists the records so a dry run can be reviewed', async () => {
+    const dry = await importInterchange(db, PROJECT_ID, recordsBundle(), { dryRun: true });
+    expect(dry.records).toHaveLength(2);
+    expect(dry.records.map((r) => r.type).sort()).toEqual(['decision', 'framework_fix']);
+    expect(dry.records.find((r) => r.type === 'decision')?.content).toContain('usage-based pricing');
+    expect(dry.records.find((r) => r.type === 'decision')?.tags).toContain('pricing');
+
+    // Real writes list the same records (what actually landed).
+    const real = await importInterchange(db, PROJECT_ID, recordsBundle());
+    expect(real.records).toHaveLength(2);
+  }, 60000);
 });

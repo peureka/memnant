@@ -38,6 +38,8 @@ export interface ImportInterchangeResult {
   duplicatesSkipped: number;
   contradictionsFlagged: number;
   dryRun: boolean;
+  /** The records written — or, in a dry run, the records that would be. */
+  records: ExtractedRecord[];
 }
 
 function buildOrigin(interchange: Interchange): RecordOrigin {
@@ -75,7 +77,7 @@ export async function importInterchange(
     }));
   }
 
-  const base: Omit<ImportInterchangeResult, 'recordsWritten' | 'duplicatesSkipped' | 'contradictionsFlagged'> = {
+  const base: Omit<ImportInterchangeResult, 'recordsWritten' | 'duplicatesSkipped' | 'contradictionsFlagged' | 'records'> = {
     kind: interchange.kind,
     provider: origin.provider,
     title: origin.title,
@@ -85,14 +87,20 @@ export async function importInterchange(
   };
 
   if (candidates.length === 0) {
-    return { ...base, recordsWritten: 0, duplicatesSkipped: 0, contradictionsFlagged: 0 };
+    return { ...base, recordsWritten: 0, duplicatesSkipped: 0, contradictionsFlagged: 0, records: [] };
   }
 
   const unique = await deduplicateAgainstLedger(db, candidates);
   const duplicatesSkipped = candidates.length - unique.length;
 
   if (options?.dryRun) {
-    return { ...base, recordsWritten: unique.length, duplicatesSkipped, contradictionsFlagged: 0 };
+    return {
+      ...base,
+      recordsWritten: unique.length,
+      duplicatesSkipped,
+      contradictionsFlagged: 0,
+      records: unique,
+    };
   }
 
   let contradictionsFlagged = 0;
@@ -113,5 +121,6 @@ export async function importInterchange(
     recordsWritten: unique.length,
     duplicatesSkipped,
     contradictionsFlagged,
+    records: unique,
   };
 }
