@@ -159,9 +159,6 @@ export async function harvestMemory(options?: {
   // Write to project ledgers
   for (const [, proj] of projectCandidates) {
     const { openDatabase } = await import('../ledger/database.js');
-    const { insertRecord } = await import('../ledger/records.js');
-    const { generateEmbedding, serializeEmbedding } = await import('../vector/embeddings.js');
-    const { autoLinkRecord } = await import('../graph/relationships.js');
 
     const fullDbPath = join(proj.projectRoot, proj.dbPath);
     let db;
@@ -195,25 +192,29 @@ export async function harvestMemory(options?: {
 
       for (let i = 0; i < unique.length; i++) {
         const record = unique[i];
-        const embedding = await generateEmbedding(record.content);
 
-        const inserted = insertRecord(db, {
-          projectId: proj.projectId,
-          type: record.type,
-          contentText: record.content,
-          embedding: serializeEmbedding(embedding),
-          tags: record.tags,
-          sourceSession: null,
-        });
-
+        let config;
         try {
           const { loadConfig } = await import('../config/load.js');
-          const config = loadConfig(proj.projectRoot);
-          // Override embedding with Float32Array for auto-linking
-          autoLinkRecord(db, { ...inserted, embedding } as any, config);
+          config = loadConfig(proj.projectRoot);
         } catch {
-          // Auto-link is best-effort
+          // Config is best-effort — the write proceeds without graph/model config
         }
+
+        // Shared integrity write: embedding, auto-link, supersession,
+        // best-effort contradiction detection (write-path parity).
+        const { writeCandidate } = await import('../ledger/write.js');
+        await writeCandidate(
+          db,
+          {
+            projectId: proj.projectId,
+            type: record.type,
+            contentText: record.content,
+            tags: record.tags,
+            sourceSession: null,
+          },
+          { config },
+        );
 
         // Find which original file this unique record corresponds to
         const originalIdx = proj.candidates.findIndex((c) => c.content === record.content);

@@ -128,9 +128,7 @@ export function registerIngestCommand(program: Command): void {
     .option('--dry-run', 'Show what would be imported without writing')
     .action(async (file: string, opts: { dryRun?: boolean }) => {
       const { openDatabase } = await import('../ledger/database.js');
-      const { insertRecord } = await import('../ledger/records.js');
-      const { generateEmbedding, serializeEmbedding } = await import('../vector/embeddings.js');
-      const { autoLinkRecord } = await import('../graph/relationships.js');
+      const { writeCandidate } = await import('../ledger/write.js');
       const { loadConfig, ConfigError, findProjectRoot } = await import('../config/load.js');
 
       const cwd = process.cwd();
@@ -195,17 +193,15 @@ export function registerIngestCommand(program: Command): void {
           }
 
           const tags = [...r.tags, 'imported', 'from:notebooklm'];
-          const embedding = await generateEmbedding(r.content_text);
 
-          const record = insertRecord(db, {
-            projectId: config.project.id,
-            type: r.type,
-            contentText: r.content_text,
-            tags,
-            embedding: serializeEmbedding(embedding),
-          });
+          // Shared integrity write: embedding, auto-link, supersession,
+          // best-effort contradiction detection (write-path parity).
+          await writeCandidate(
+            db,
+            { projectId: config.project.id, type: r.type, contentText: r.content_text, tags },
+            { config },
+          );
 
-          autoLinkRecord(db, record, config);
           existingTexts.add(r.content_text);
           imported++;
         }

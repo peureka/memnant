@@ -4,10 +4,11 @@
  */
 
 import type { ExtractedRecord } from './extract.js';
+import type { ProjectConfig } from '../types.js';
 import { generateEmbedding } from '../vector/embeddings.js';
-import { serializeEmbedding, deserializeEmbedding } from '../vector/embedding-utils.js';
+import { deserializeEmbedding } from '../vector/embedding-utils.js';
 import { dotProduct } from '../vector/search.js';
-import { insertRecord } from '../ledger/records.js';
+import { writeCandidate, type CallModelFn } from '../ledger/write.js';
 import { findTranscriptsByMtime, getTranscriptDir } from './discover.js';
 import { parseTranscript } from './parser.js';
 import { extractKnowledge } from './extract.js';
@@ -97,12 +98,22 @@ export async function extractCandidates(
  * A watermark (`.memnant/harvest-state.json`) skips unchanged files entirely
  * (zero parsing/embedding) and parses only appended content from grown files.
  * The >=0.90 embedding dedup remains a safety net on top of the watermark.
+ *
+ * `options.config` enables the shared integrity path (auto-linking,
+ * supersession, best-effort contradiction detection) — write-path parity
+ * with `memnant import`.
  */
 export async function harvest(
   db: any,
   projectRoot: string,
   projectId: string,
-  options?: { tierConfig?: any; transcriptProjectRoot?: string; transcriptDir?: string },
+  options?: {
+    tierConfig?: any;
+    transcriptProjectRoot?: string;
+    transcriptDir?: string;
+    config?: ProjectConfig;
+    callModelFn?: CallModelFn;
+  },
 ): Promise<HarvestResult> {
   const transcriptDir =
     options?.transcriptDir ?? getTranscriptDir(options?.transcriptProjectRoot ?? projectRoot);
@@ -154,17 +165,13 @@ export async function harvest(
   const unique = await deduplicateAgainstLedger(db, candidates);
   const duplicatesSkipped = candidates.length - unique.length;
 
-  // Write records
+  // Write records through the shared integrity path (parity with import).
   for (const record of unique) {
-    const embedding = await generateEmbedding(record.content);
-    const embeddingBuffer = serializeEmbedding(embedding);
-    insertRecord(db, {
-      projectId,
-      type: record.type,
-      contentText: record.content,
-      embedding: embeddingBuffer,
-      tags: record.tags,
-    });
+    await writeCandidate(
+      db,
+      { projectId, type: record.type, contentText: record.content, tags: record.tags },
+      { config: options?.config, callModelFn: options?.callModelFn },
+    );
   }
 
   writeHarvestState(statePath, nextState);

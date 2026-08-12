@@ -30,8 +30,7 @@ export function registerLogCommand(program: Command): void {
     .option('--target-symbol <name>', 'Symbol name in target file, or "global" for entire file')
     .action(async (opts: { type: string; content?: string; tags?: string; relatesTo?: string; targetFile?: string; targetSymbol?: string }) => {
       const { openDatabase } = await import('../ledger/database.js');
-      const { insertRecord } = await import('../ledger/records.js');
-      const { generateEmbedding, serializeEmbedding } = await import('../vector/embeddings.js');
+      const { writeCandidate } = await import('../ledger/write.js');
       const { RECORD_TYPES } = await import('../types.js');
       const { getActiveSession } = await import('../ledger/sessions.js');
       const { computeAstHashForRecord } = await import('../ast/parser.js');
@@ -83,15 +82,11 @@ export function registerLogCommand(program: Command): void {
 
       const db = openDatabase(dbPath);
 
-      let record: ReturnType<typeof insertRecord>;
+      let record: Awaited<ReturnType<typeof writeCandidate>>['record'];
       try {
         // Parse tags and related records
         const tags = opts.tags ? opts.tags.split(',').map((t) => t.trim()) : [];
         const relatedRecords = opts.relatesTo ? opts.relatesTo.split(',').map((id) => id.trim()) : [];
-
-        // Generate embedding
-        const embedding = await generateEmbedding(content);
-        const embeddingBuffer = serializeEmbedding(embedding);
 
         // Check for active session
         const activeSession = getActiveSession(db, config.project.id);
@@ -106,19 +101,24 @@ export function registerLogCommand(program: Command): void {
           }
         }
 
-        // Insert record
-        record = insertRecord(db, {
-          projectId: config.project.id,
-          type: opts.type as (typeof RECORD_TYPES)[number],
-          contentText: content,
-          tags,
-          relatedRecords,
-          embedding: embeddingBuffer,
-          sourceSession: activeSession?.id ?? null,
-          targetFile: opts.targetFile ?? null,
-          targetSymbol: opts.targetSymbol ?? null,
-          astHash,
-        });
+        // Shared integrity write: embedding, auto-link, supersession,
+        // best-effort contradiction detection (write-path parity with MCP log).
+        const written = await writeCandidate(
+          db,
+          {
+            projectId: config.project.id,
+            type: opts.type as (typeof RECORD_TYPES)[number],
+            contentText: content,
+            tags,
+            relatedRecords,
+            sourceSession: activeSession?.id ?? null,
+            targetFile: opts.targetFile ?? null,
+            targetSymbol: opts.targetSymbol ?? null,
+            astHash,
+          },
+          { config },
+        );
+        record = written.record;
       } finally {
         db.close();
       }

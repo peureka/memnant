@@ -71,7 +71,7 @@ export function registerHarvestCommand(program: Command): void {
       } catch (e: any) { console.error('harvest entry failed:', e?.message); }
 
       const { harvest } = await import('../harvest/harvest.js');
-      const result = await harvest(db, projectRoot, config.project.id, { tierConfig, transcriptProjectRoot, transcriptDir });
+      const result = await harvest(db, projectRoot, config.project.id, { tierConfig, transcriptProjectRoot, transcriptDir, config });
       db.close();
 
       if (!result.transcriptPath) {

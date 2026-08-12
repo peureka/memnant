@@ -404,9 +404,6 @@ export async function startServer(): Promise<void> {
         }
       }
 
-      const embedding = await generateEmbedding(content);
-      const embeddingBuffer = serializeEmbedding(embedding);
-
       // Compute AST hash if target_file and target_symbol are provided
       let astHash: string | null = null;
       if (target_file && target_symbol) {
@@ -420,22 +417,25 @@ export async function startServer(): Promise<void> {
       // Auto-start session if none active (Story 8.1)
       const activeSession = ensureActiveSession(db, config.project.id);
 
-      const record = insertRecord(db, {
-        projectId: config.project.id,
-        type: type as RecordType,
-        contentText: content,
-        tags: parsedTags,
-        relatedRecords,
-        embedding: embeddingBuffer,
-        sourceSession: activeSession.id,
-        targetFile: target_file ?? null,
-        targetSymbol: target_symbol ?? null,
-        astHash,
-        assumptions: parsedAssumptions,
-      });
-
-      // Auto-link to related records (Epic 9)
-      autoLinkRecord(db, record, config);
+      // Shared integrity write: embedding, auto-link, supersession,
+      // best-effort contradiction detection (write-path parity).
+      const { writeCandidate } = await import('../ledger/write.js');
+      const { record } = await writeCandidate(
+        db,
+        {
+          projectId: config.project.id,
+          type: type as RecordType,
+          contentText: content,
+          tags: parsedTags,
+          relatedRecords,
+          sourceSession: activeSession.id,
+          targetFile: target_file ?? null,
+          targetSymbol: target_symbol ?? null,
+          astHash,
+          assumptions: parsedAssumptions,
+        },
+        { config },
+      );
 
       // Create version_of relationship if specified
       if (version_of) {
@@ -548,7 +548,7 @@ export async function startServer(): Promise<void> {
             harvestTierConfig = config.orchestrator.tiers.analysis;
           }
         } catch (e: any) { console.error('auto-harvest config failed:', e?.message); }
-        const harvestResult = await harvest(db, projectRoot, config.project.id, { tierConfig: harvestTierConfig });
+        const harvestResult = await harvest(db, projectRoot, config.project.id, { tierConfig: harvestTierConfig, config });
         if (harvestResult.recordsWritten > 0) {
           log(`harvest: ${harvestResult.recordsWritten} records extracted from transcript`);
         }

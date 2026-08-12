@@ -104,9 +104,7 @@ async function runInterchangeImport(
 
 async function runPortableImport(data: PortableFile, projectRoot: string, config: any): Promise<void> {
   const { openDatabase } = await import('../ledger/database.js');
-  const { insertRecord } = await import('../ledger/records.js');
-  const { generateEmbedding, serializeEmbedding } = await import('../vector/embeddings.js');
-  const { autoLinkRecord } = await import('../graph/relationships.js');
+  const { writeCandidate } = await import('../ledger/write.js');
 
   const dbPath = join(projectRoot, config.memory.db_path);
 
@@ -154,19 +152,18 @@ async function runPortableImport(data: PortableFile, projectRoot: string, config
 
       const tags = [...(portableRecord.tags ?? []), 'imported', sourceTag, ...(builderTag ? [builderTag] : [])];
 
-      const embedding = await generateEmbedding(portableRecord.content_text);
-      const embeddingBuffer = serializeEmbedding(embedding);
-
-      const record = insertRecord(db, {
-        projectId: config.project.id,
-        type: (isTeamImport ? portableRecord.type : 'framework_fix') as RecordType,
-        contentText: portableRecord.content_text,
-        tags,
-        embedding: embeddingBuffer,
-      });
-
-      // Auto-link to existing records
-      autoLinkRecord(db, record, config);
+      // Shared integrity write: embedding, auto-link, supersession,
+      // best-effort contradiction detection (write-path parity).
+      await writeCandidate(
+        db,
+        {
+          projectId: config.project.id,
+          type: (isTeamImport ? portableRecord.type : 'framework_fix') as RecordType,
+          contentText: portableRecord.content_text,
+          tags,
+        },
+        { config },
+      );
 
       existingTexts.add(portableRecord.content_text);
       imported++;

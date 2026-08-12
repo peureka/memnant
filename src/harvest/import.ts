@@ -14,10 +14,7 @@ import type { ExtractedRecord } from './extract.js';
 import type { Interchange } from './interchange.js';
 import { toTranscriptMessages } from './interchange.js';
 import { extractCandidates, deduplicateAgainstLedger } from './harvest.js';
-import { generateEmbedding } from '../vector/embeddings.js';
-import { serializeEmbedding } from '../vector/embedding-utils.js';
-import { insertRecord } from '../ledger/records.js';
-import { autoLinkRecord, detectContradictions } from '../graph/relationships.js';
+import { writeCandidate, type CallModelFn } from '../ledger/write.js';
 
 export interface ImportInterchangeOptions {
   /** Full project config — enables contradiction detection when a triage tier is configured. */
@@ -26,6 +23,8 @@ export interface ImportInterchangeOptions {
   tierConfig?: unknown;
   /** Validate, extract, and dedupe, but write nothing. */
   dryRun?: boolean;
+  /** Injectable model call for contradiction detection (tests). */
+  callModelFn?: CallModelFn;
 }
 
 export interface ImportInterchangeResult {
@@ -100,30 +99,13 @@ export async function importInterchange(
 
   for (const candidate of unique) {
     const tags = [...new Set([...candidate.tags, 'imported', `from:${origin.provider}`])];
-    const embedding = await generateEmbedding(candidate.content);
 
-    const record = insertRecord(db, {
-      projectId,
-      type: candidate.type,
-      contentText: candidate.content,
-      embedding: serializeEmbedding(embedding),
-      tags,
-      origin,
-    });
-
-    autoLinkRecord(db, record, options?.config);
-
-    // Contradiction detection is best-effort: it needs a triage-tier LLM and
-    // must never block an import (offline imports simply skip it).
-    if (options?.config?.orchestrator?.tiers?.triage) {
-      try {
-        const { callModel } = await import('../orchestrator/providers.js');
-        const flagged = await detectContradictions(db, record, options.config, callModel);
-        contradictionsFlagged += flagged.length / 2; // relationships are bidirectional pairs
-      } catch {
-        // No API key, network failure — the import still succeeds.
-      }
-    }
+    const { contradictions } = await writeCandidate(
+      db,
+      { projectId, type: candidate.type, contentText: candidate.content, tags, origin },
+      { config: options?.config, callModelFn: options?.callModelFn },
+    );
+    contradictionsFlagged += contradictions.length / 2; // relationships are bidirectional pairs
   }
 
   return {

@@ -47,7 +47,7 @@ export function registerObserveCommand(program: Command): void {
 
         const db = openDatabase(dbPath);
         const { observeText } = await import('../observe/observe.js');
-        const result = await observeText(db, text, config.project.id);
+        const result = await observeText(db, text, config.project.id, { config });
         db.close();
 
         if (result.recordsWritten > 0) {
