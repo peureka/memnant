@@ -114,6 +114,17 @@ memnant is built for the way agentic development actually runs: a coordinator an
 - **Nothing an agent learns is lost.** Harvest reads every transcript in a project, subagent files included, with a watermark so repeat runs cost nothing. A worktree already deleted? `memnant harvest --transcript-dir <path>` recovers its orphaned transcripts.
 - **Agents without MCP still contribute.** CLI `session close` ships shared records the same way the MCP path does, so a headless agent's decisions travel in its pull request.
 
+## Portable decision memory
+
+Decisions don't only happen in your coding agent. A ChatGPT conversation that settles your pricing model, a Claude.ai thread that rules out an architecture — those belong in the same ledger.
+
+```bash
+memnant import conversation.json
+# Imported chatgpt conversation "Pricing model": 42 messages → 7 candidates → 5 records written (2 duplicates skipped)
+```
+
+`memnant import` takes a small provider-neutral interchange file — a conversation export, or durable records any AI can produce when you ask it to ([INTERCHANGE.md](INTERCHANGE.md) includes the prompt). Either way the import runs the full pipeline: extraction, semantic dedupe, append-only records, auto-linking, supersession, provenance (`from:chatgpt`, original title and URL). Your memory belongs to you, not to the model provider — and every agent connected to memnant gets it.
+
 ## Session logs, written by the ledger
 
 `memnant export-session --latest --out docs/session-logs/` renders any closed session as a markdown log you commit: goal, what shipped, decisions, fixes, what's deferred. Structured template fields (Decision:, Solution:) render as themselves, not as their first sentence. Stop writing session logs by hand; the ledger already knows what happened.

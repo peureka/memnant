@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { findTranscripts, findLatestTranscript } from '../src/harvest/discover.js';
 import { parseTranscript } from '../src/harvest/parser.js';
 import { extractKnowledge } from '../src/harvest/extract.js';
-import { buildExtractionPrompt, parseExtractionResponse } from '../src/harvest/extract-llm.js';
+import { buildExtractionPrompt, parseExtractionResponse, EXTRACTION_SYSTEM_PROMPT } from '../src/harvest/extract-llm.js';
 import { deduplicateAgainstLedger } from '../src/harvest/harvest.js';
 import { createDatabase } from '../src/ledger/database.js';
 import { insertRecord } from '../src/ledger/records.js';
@@ -225,6 +225,13 @@ describe('LLM extraction', () => {
   it('returns empty on malformed response', () => {
     const records = parseExtractionResponse('not json at all');
     expect(records).toEqual([]);
+  });
+
+  it('extraction prompt requires user acceptance, not assistant suggestion', () => {
+    // Pins the trust rule: an unaccepted recommendation must not become a record.
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('never accepted');
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('a proposal, not a decision');
+    expect(EXTRACTION_SYSTEM_PROMPT).toContain('When in doubt, leave it out');
   });
 
   it('filters out invalid record types', () => {

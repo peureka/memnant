@@ -61,7 +61,12 @@ export interface HarvestResult {
   duplicatesSkipped: number;
 }
 
-async function extractCandidates(
+/**
+ * Extract candidate records from canonical messages: LLM tier when
+ * configured, rule-based fallback otherwise. Shared by transcript harvest
+ * and interchange import.
+ */
+export async function extractCandidates(
   messages: import('./parser.js').TranscriptMessage[],
   tierConfig: any,
 ): Promise<ExtractedRecord[]> {

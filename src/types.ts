@@ -20,6 +20,19 @@ export const RECORD_TYPES = [
 
 export type RecordType = (typeof RECORD_TYPES)[number];
 
+/**
+ * Where an externally imported record came from. Stored inside the record's
+ * `content` JSON (whose schema varies by type, per SPEC) — the ledger's
+ * `created_at` doubles as the import timestamp.
+ */
+export interface RecordOrigin {
+  provider: string;
+  conversation_id?: string;
+  title?: string;
+  url?: string;
+  exported_at?: string;
+}
+
 export interface Project {
   id: string;
   name: string;

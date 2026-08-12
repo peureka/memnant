@@ -10,19 +10,28 @@ import type { ExtractedRecord } from './extract.js';
 
 const VALID_TYPES = ['decision', 'framework_fix'];
 
-const EXTRACTION_SYSTEM_PROMPT = `You extract structured knowledge records from developer conversations.
+export const EXTRACTION_SYSTEM_PROMPT = `You extract durable knowledge records from conversations between a user and an AI assistant. The ledger you feed must stay higher-trust than the transcript: a record is something still true, not something once said.
 
 Output a JSON array. Each element has:
 - type: "decision" or "framework_fix"
-- content: 1-3 sentence summary (dense, factual)
+- content: 1-3 sentence summary (dense, factual, self-contained — readable without the conversation)
 - tags: string array (e.g. ["rejected"], ["postgres", "architecture"])
 
-Rules:
-- Only extract actual decisions, framework fixes, or rejected approaches
-- Tag rejections with "rejected"
-- Skip small talk, status updates, and routine code discussion
-- If nothing worth extracting, return []
-- Return ONLY the JSON array, no markdown fences`;
+Extract ONLY:
+- Decisions the user made or explicitly accepted ("let's go with X", "yes, do that", the user directing work that follows the choice)
+- Rejected approaches — something tried or seriously considered, then explicitly ruled out (tag "rejected")
+- Framework fixes — a concrete problem with a solution that was applied or verified
+- Superseding decisions — a choice that explicitly replaces an earlier one
+
+Do NOT extract:
+- Assistant suggestions or recommendations the user never accepted — "I recommend X" is a proposal, not a decision
+- Brainstorming, open questions, or options still under discussion
+- Speculative "we could / might / should consider" statements
+- Status updates, small talk, and routine implementation chatter
+
+Distinguish proposal, discussion, and commitment: only commitment (explicit acceptance, or the user acting on the choice) produces a record. When in doubt, leave it out — prefer fewer, higher-confidence records.
+
+If nothing qualifies, return []. Return ONLY the JSON array, no markdown fences.`;
 
 export function buildExtractionPrompt(messages: TranscriptMessage[]): string {
   const lines = messages.map(m => `[${m.role}]: ${m.text}`);

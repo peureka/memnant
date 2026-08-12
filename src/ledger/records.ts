@@ -7,7 +7,7 @@
 
 import type { Database } from './database.js';
 import { v4 as uuidv4 } from 'uuid';
-import type { Record, RecordType } from '../types.js';
+import type { Record, RecordOrigin, RecordType } from '../types.js';
 import { RECORD_TYPES } from '../types.js';
 import { deserializeEmbedding, MODEL_NAME } from '../vector/embedding-utils.js';
 
@@ -25,6 +25,8 @@ export interface InsertRecordParams {
   embeddingModel?: string;
   assumptions?: string[] | null;
   builderId?: string | null;
+  /** External-source provenance, stored inside the content JSON. */
+  origin?: RecordOrigin | null;
 }
 
 export function insertRecord(db: Database, params: InsertRecordParams): Record {
@@ -36,7 +38,9 @@ export function insertRecord(db: Database, params: InsertRecordParams): Record {
 
   const id = uuidv4();
   const createdAt = new Date().toISOString();
-  const content = JSON.stringify({ text: params.contentText });
+  const content = JSON.stringify(
+    params.origin ? { text: params.contentText, origin: params.origin } : { text: params.contentText },
+  );
   const tags = JSON.stringify(params.tags ?? []);
   const relatedRecords = JSON.stringify(params.relatedRecords ?? []);
 
@@ -67,7 +71,9 @@ export function insertRecord(db: Database, params: InsertRecordParams): Record {
     id,
     project_id: params.projectId,
     type: params.type,
-    content: { text: params.contentText },
+    content: params.origin
+      ? { text: params.contentText, origin: params.origin }
+      : { text: params.contentText },
     content_text: params.contentText,
     tags: params.tags ?? [],
     related_records: params.relatedRecords ?? [],
