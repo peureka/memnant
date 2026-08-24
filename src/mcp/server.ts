@@ -1359,13 +1359,11 @@ export async function startServer(): Promise<void> {
       await onToolCall();
       log('memnant_session_log');
 
-      const active = getActiveSession(db, config.project.id);
-      if (!active) {
-        return {
-          content: [{ type: 'text' as const, text: 'No active session. Start one with `npx memnant` or `memnant session start`.' }],
-          isError: true,
-        };
-      }
+      // Sessions auto-close after 60 idle minutes, on a timer as well as on tool
+      // calls, so the session this summary belongs to may have closed underneath
+      // us. Refusing would discard the agent's summary and leave the mechanical
+      // auto-close stub as the only record of the work.
+      const active = ensureActiveSession(db, config.project.id);
 
       if (!summary.trim()) {
         return {
@@ -1420,13 +1418,10 @@ export async function startServer(): Promise<void> {
       await onToolCall();
       log('memnant_session_close');
 
-      const active = getActiveSession(db, config.project.id);
-      if (!active) {
-        return {
-          content: [{ type: 'text' as const, text: 'No active session to close. Start one with `npx memnant` or `memnant session start`.' }],
-          isError: true,
-        };
-      }
+      // Same as session_log: an auto-close must not cost the agent its summary.
+      // Records are immutable, so the already-closed session's stub log cannot be
+      // rewritten; a fresh session carries the real summary and closes with it.
+      const active = ensureActiveSession(db, config.project.id);
 
       if (!summary.trim()) {
         return {
