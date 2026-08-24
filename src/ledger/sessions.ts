@@ -6,8 +6,14 @@
  */
 
 import type { Database } from './database.js';
+import { insertRecord } from './records.js';
+import { drainCosts, serializeCostTag } from '../orchestrator/costs.js';
+import { serializeEmbedding } from '../vector/embedding-utils.js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Session } from '../types.js';
+
+/** all-MiniLM-L6-v2 output width; see src/vector/embeddings.ts. */
+const EMBEDDING_DIMENSIONS = 384;
 
 interface SessionRow {
   id: string;
@@ -72,6 +78,42 @@ export function closeSession(db: Database, sessionId: string, logRecordId: strin
     'UPDATE session SET closed_at = ?, log_record_id = ? WHERE id = ?',
     [closedAt, logRecordId, sessionId],
   );
+
+  persistSessionCosts(db, sessionId);
+}
+
+/**
+ * Write the session's accrued model spend into the ledger.
+ *
+ * callModel accrues cost but holds no database handle, so this is the point
+ * where it becomes queryable. One record per call: parseCostFromRecord reads a
+ * single tag per record, so batching them into one record would silently report
+ * only the first.
+ */
+function persistSessionCosts(db: Database, sessionId: string): void {
+  const costs = drainCosts();
+  if (costs.length === 0) return;
+
+  const row = db.get('SELECT project_id FROM session WHERE id = ?', [sessionId]) as
+    | { project_id: string }
+    | undefined;
+  if (!row) return;
+
+  // A zero vector scores 0 against every query, which is below the recall
+  // similarity threshold — so cost records stay out of search results without
+  // needing a type filter, and without paying to embed a machine-readable tag.
+  const inertEmbedding = serializeEmbedding(new Float32Array(EMBEDDING_DIMENSIONS));
+
+  for (const cost of costs) {
+    insertRecord(db, {
+      projectId: row.project_id,
+      type: 'orchestrator_task',
+      contentText: `${cost.tier} tier call to ${cost.model}${serializeCostTag(cost)}`,
+      tags: ['cost', cost.tier],
+      embedding: inertEmbedding,
+      sourceSession: sessionId,
+    });
+  }
 }
 
 export function closeSessionSkipped(db: Database, sessionId: string, reason: string): void {

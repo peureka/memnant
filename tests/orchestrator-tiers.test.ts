@@ -14,7 +14,7 @@ describe('Orchestrator tiers', () => {
     const { tiers } = createDefaultConfig('scaffold-probe', 'test-id').orchestrator;
 
     expect(tiers.triage.model).toBe('claude-haiku-4-5');
-    expect(tiers.analysis.model).toBe('claude-opus-5');
+    expect(tiers.analysis.model).toBe('claude-sonnet-5');
     expect(tiers.build.model).toBe('claude-opus-5');
   });
 

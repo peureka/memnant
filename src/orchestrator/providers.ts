@@ -8,6 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import type { TierConfig } from '../types.js';
+import { formatCostMetadata, recordCost } from './costs.js';
 
 export interface ModelResponse {
   text: string;
@@ -20,6 +21,27 @@ export interface ModelResponse {
  * Call a model provider with a message and context.
  */
 export async function callModel(
+  tierConfig: TierConfig,
+  systemPrompt: string,
+  userMessage: string,
+): Promise<ModelResponse> {
+  const response = await dispatch(tierConfig, systemPrompt, userMessage);
+
+  // Record after the call returns: a failed call spends nothing, and throwing
+  // before this line is what keeps refused/errored requests out of the ledger.
+  recordCost(
+    formatCostMetadata(
+      tierConfig.name ?? 'unknown',
+      tierConfig.model,
+      response.input_tokens,
+      response.output_tokens,
+    ),
+  );
+
+  return response;
+}
+
+async function dispatch(
   tierConfig: TierConfig,
   systemPrompt: string,
   userMessage: string,

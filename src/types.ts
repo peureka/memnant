@@ -155,6 +155,10 @@ export interface ProjectConfig {
 export interface TierConfig {
   provider: string;
   model: string;
+  /** Tier this config belongs to ('triage' | 'analysis' | 'build'), stamped by
+   *  loadConfig so a model call can attribute its cost without the call sites
+   *  having to pass the tier name through. */
+  name?: string;
   max_context_tokens?: number;
   base_url?: string;
   api_key_env?: string;

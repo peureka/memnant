@@ -32,7 +32,7 @@ export function createDefaultConfig(
         },
         analysis: {
           provider: 'anthropic',
-          model: 'claude-opus-5',
+          model: 'claude-sonnet-5',
           max_context_tokens: 8000,
         },
         build: {

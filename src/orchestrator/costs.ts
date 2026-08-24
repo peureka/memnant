@@ -64,6 +64,29 @@ export function formatCostMetadata(
   };
 }
 
+// Costs accrued since the last drain. callModel is the single funnel every LLM
+// call passes through, but it has no ledger handle — it is a pure function over
+// a tier config. So spend accumulates here and whoever owns a database drains it
+// (see persistSessionCosts in ledger/sessions.ts, called at session close).
+const pending: CostMetadata[] = [];
+
+/**
+ * Record what a completed model call cost. Called by callModel; unknown models
+ * still record, at cost_usd 0, so an unpriced model shows up as a gap in the
+ * pricing table rather than vanishing from the ledger entirely.
+ */
+export function recordCost(meta: CostMetadata): void {
+  pending.push(meta);
+}
+
+/**
+ * Take everything accrued since the last drain, clearing it. Draining twice
+ * returns nothing the second time — a session cannot bill the same call twice.
+ */
+export function drainCosts(): CostMetadata[] {
+  return pending.splice(0, pending.length);
+}
+
 /**
  * Serialize cost metadata as a tagged line for embedding in record content.
  */

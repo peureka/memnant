@@ -86,5 +86,17 @@ export function loadConfig(cwd: string): ProjectConfig {
     );
   }
 
-  return raw as ProjectConfig;
+  const loaded = raw as ProjectConfig;
+
+  // Stamp each tier with its own name so a model call can attribute its spend
+  // without every call site threading the tier name through. Tiers are optional
+  // in the schema, so this is best-effort.
+  const tiers = loaded.orchestrator?.tiers as Record<string, { name?: string }> | undefined;
+  if (tiers) {
+    for (const [name, tier] of Object.entries(tiers)) {
+      if (tier && typeof tier === 'object') tier.name = name;
+    }
+  }
+
+  return loaded;
 }
