@@ -19,6 +19,25 @@ describe('Cost Tracking', () => {
       const cost = computeCost('unknown-model', 1000, 500);
       expect(cost).toBe(0);
     });
+
+    // Published per-million rates for every model the fleet pins in memnant.yaml.
+    // Asserted as real numbers, not just > 0: a table that was 3x wrong for
+    // Opus 4.6 survived because the older tests only checked positivity.
+    it.each([
+      ['claude-fable-5', 10.0, 50.0],
+      ['claude-opus-5', 5.0, 25.0],
+      ['claude-opus-4-8', 5.0, 25.0],
+      ['claude-opus-4-6', 5.0, 25.0],
+      ['claude-sonnet-5', 2.0, 10.0],
+      ['claude-sonnet-4-6', 3.0, 15.0],
+      ['claude-sonnet-4-5-20250929', 3.0, 15.0],
+      ['claude-haiku-4-5', 1.0, 5.0],
+      ['claude-haiku-4-5-20251001', 1.0, 5.0],
+    ])('prices %s at its published per-million rate', async (model, input, output) => {
+      const { computeCost } = await import('../src/orchestrator/costs.js');
+      expect(computeCost(model, 1_000_000, 0)).toBeCloseTo(input, 6);
+      expect(computeCost(model, 0, 1_000_000)).toBeCloseTo(output, 6);
+    });
   });
 
   describe('formatCostMetadata', () => {

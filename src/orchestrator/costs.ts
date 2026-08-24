@@ -13,12 +13,23 @@ export interface CostMetadata {
   cost_usd: number;
 }
 
-// Pricing per million tokens (USD)
+// Pricing per million tokens (USD).
+// Standard first-party Anthropic API rates, verified against
+// platform.claude.com/docs/en/about-claude/pricing on 2026-08-24.
+// Sonnet 5's $2/$10 launched as introductory pricing through 2026-08-31 and
+// was since made standard; the scheduled rise to $3/$15 was cancelled.
 const PRICING: Record<string, { input: number; output: number }> = {
   // Anthropic
-  'claude-haiku-4-5-20251001': { input: 0.80, output: 4.00 },
+  'claude-fable-5': { input: 10.00, output: 50.00 },
+  'claude-opus-5': { input: 5.00, output: 25.00 },
+  'claude-opus-4-8': { input: 5.00, output: 25.00 },
+  'claude-opus-4-6': { input: 5.00, output: 25.00 },
+  'claude-sonnet-5': { input: 2.00, output: 10.00 },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
+  'claude-haiku-4-5': { input: 1.00, output: 5.00 },
+  // Dated aliases retained so historical cost tags stay parseable.
   'claude-sonnet-4-5-20250929': { input: 3.00, output: 15.00 },
-  'claude-opus-4-6': { input: 15.00, output: 75.00 },
+  'claude-haiku-4-5-20251001': { input: 1.00, output: 5.00 },
   // OpenAI
   'gpt-4o': { input: 2.50, output: 10.00 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },

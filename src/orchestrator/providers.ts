@@ -70,9 +70,13 @@ async function callAnthropic(
 ): Promise<ModelResponse> {
   const client = new Anthropic();
 
+  // Thinking is on by default on current models and draws from this same
+  // ceiling, so 4096 truncated the answer rather than the reasoning. Effort is
+  // deliberately not set here: it is rejected by Haiku 4.5, which the triage
+  // tier still pins, and callAnthropic receives no tier to vary it by.
   const response = await client.messages.create({
     model,
-    max_tokens: 4096,
+    max_tokens: 16000,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
   });
