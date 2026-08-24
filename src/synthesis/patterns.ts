@@ -62,8 +62,11 @@ export async function detectPatterns(
   for (const cluster of allClusters) {
     try {
       cluster.summary = await summarizeCluster(cluster, config.orchestrator.tiers.analysis);
-    } catch {
-      // Skip summary if LLM unavailable
+    } catch (e: any) {
+      // The cluster still stands without a summary, but say so. Swallowing this
+      // hid two model generations of stale tier pins: every summary silently
+      // vanished and nothing downstream could tell degraded output from none.
+      console.error(`cluster summary failed (${config.orchestrator.tiers.analysis.model}):`, e?.message);
     }
   }
 
