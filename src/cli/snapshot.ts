@@ -5,6 +5,7 @@
  * Story 3.3: --auto flag for git hook integration.
  */
 
+import { cliSessionOwner } from '../config/load.js';
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -51,7 +52,7 @@ export function registerSnapshotCommand(program: Command): void {
         process.exit(1);
       }
 
-      const db = openDatabase(dbPath);
+      const db = openDatabase(dbPath, cliSessionOwner(config, projectRoot));
 
       try {
         const oldSnapshot = getLastSnapshot(db);

@@ -6,6 +6,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
+import { createHash } from 'node:crypto';
 import { join, resolve, dirname } from 'path';
 import yaml from 'js-yaml';
 import type { ProjectConfig } from '../types.js';
@@ -99,4 +100,13 @@ export function loadConfig(cwd: string): ProjectConfig {
   }
 
   return loaded;
+}
+
+/** Use a stable scope across CLI invocations in the same checkout. */
+export function cliSessionOwner(config: ProjectConfig, projectRoot: string): string {
+  const explicit = process.env.MEMNANT_SESSION_OWNER?.trim();
+  if (explicit) return explicit;
+  const builder = config.project.builder ?? process.env.MEMNANT_BUILDER_ID ?? '';
+  const scope = createHash('sha256').update(JSON.stringify([projectRoot, builder])).digest('hex');
+  return `cli:${scope}`;
 }

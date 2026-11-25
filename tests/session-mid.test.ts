@@ -17,7 +17,7 @@ const { Database } = pkg;
 import { readFileSync } from 'fs';
 import yaml from 'js-yaml';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { ProjectConfig } from '../src/types.js';
 
 const CLI_PATH = join(import.meta.dirname, '..', 'dist', 'cli', 'index.js');
@@ -90,8 +90,12 @@ describe('memnant mid-session logging', { timeout: 120_000 }, () => {
   });
 
   // AC 2: MCP memnant_log during active session sets source_session
-  it('MCP log during active session sets source_session', async () => {
-    runMemnant(['session', 'start'], testDir);
+  it('MCP log during a deliberate handoff keeps the CLI source_session', async () => {
+    const start = runMemnant(['session', 'start'], testDir);
+    const handoff = start.stderr.match(/^MCP handoff environment: (.+)$/m);
+    expect(handoff).not.toBeNull();
+    const env = JSON.parse(handoff![1]) as { MEMNANT_SESSION_OWNER: string };
+    expect(env.MEMNANT_SESSION_OWNER).toEqual(expect.any(String));
 
     const db = openDb(testDir);
     const session = db.get('SELECT id FROM session WHERE closed_at IS NULL') as unknown as { id: string };
@@ -102,6 +106,7 @@ describe('memnant mid-session logging', { timeout: 120_000 }, () => {
       command: 'node',
       args: [CLI_PATH, 'serve'],
       cwd: testDir,
+      env: { ...getDefaultEnvironment(), ...env },
     });
     const client = new Client({ name: 'test-mid-session', version: '0.1.0' });
     await client.connect(transport);
@@ -124,6 +129,17 @@ describe('memnant mid-session logging', { timeout: 120_000 }, () => {
     ) as unknown as { source_session: string | null };
     expect(record.source_session).toBe(session.id);
     db2.close();
+
+    const independent = new Client({ name: 'independent', version: '1.0' });
+    await independent.connect(new StdioClientTransport({ command: 'node', args: [CLI_PATH, 'serve'], cwd: testDir }));
+    try {
+      const result = await independent.callTool({ name: 'memnant_log', arguments: {
+        type: 'decision', content: 'Independent review outside the CLI handoff.',
+      } });
+      const receipt = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+      expect(receipt.session_started).toBe(true);
+      expect(receipt.session_id).not.toBe(session.id);
+    } finally { await independent.close(); }
   });
 
   // AC 3: memnant session status shows session info and record counts

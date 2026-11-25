@@ -16,6 +16,9 @@ export interface Migration {
   down?: (db: Database) => void;
 }
 
+export const OPEN_SESSION_OWNER_INDEX = `CREATE UNIQUE INDEX IF NOT EXISTS idx_session_open_owner
+  ON session(project_id, owner_key) WHERE owner_key IS NOT NULL AND closed_at IS NULL`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 3,
@@ -138,6 +141,21 @@ export const MIGRATIONS: Migration[] = [
     },
     down: (db) => {
       db.run('ALTER TABLE record ADD COLUMN staleness_marker TEXT');
+    },
+  },
+  {
+    version: 14,
+    description: 'Scope active sessions to their caller while preserving unowned history',
+    up: (db) => {
+      const columns = db.all('PRAGMA table_info(session)');
+      if (!columns.some(column => column.name === 'owner_key')) {
+        db.run('ALTER TABLE session ADD COLUMN owner_key TEXT');
+      }
+      db.run(OPEN_SESSION_OWNER_INDEX);
+    },
+    down: (db) => {
+      db.run('DROP INDEX IF EXISTS idx_session_open_owner');
+      db.run('ALTER TABLE session DROP COLUMN owner_key');
     },
   },
 ];

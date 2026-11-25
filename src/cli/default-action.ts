@@ -7,6 +7,8 @@
  * 3. Active session exists → show session status
  */
 
+import { announceSessionStart } from './session.js';
+import { cliSessionOwner } from '../config/load.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { findProjectRoot } from '../config/load.js';
@@ -50,7 +52,7 @@ export async function defaultAction(): Promise<void> {
   const { openDatabase } = await import('../ledger/database.js');
   const { createSession, getActiveSession, getSessionRecordCounts } = await import('../ledger/sessions.js');
 
-  const db = openDatabase(dbPath);
+  const db = openDatabase(dbPath, cliSessionOwner(config, projectRoot));
 
   try {
     const active = getActiveSession(db, config.project.id);
@@ -98,7 +100,7 @@ export async function defaultAction(): Promise<void> {
       }
 
       const session = createSession(db, config.project.id);
-      process.stderr.write(`Session ${session.id.slice(0, 8)} started.\n`);
+      announceSessionStart(session);
       console.log(formatContextAsMarkdown(ctx));
     }
   } finally {

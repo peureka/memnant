@@ -6,6 +6,7 @@
  * Content can come from --content flag or stdin pipe.
  */
 
+import { cliSessionOwner } from '../config/load.js';
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -80,7 +81,7 @@ export function registerLogCommand(program: Command): void {
         process.exit(1);
       }
 
-      const db = openDatabase(dbPath);
+      const db = openDatabase(dbPath, cliSessionOwner(config, projectRoot));
 
       let record: Awaited<ReturnType<typeof writeCandidate>>['record'];
       try {
