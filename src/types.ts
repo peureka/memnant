@@ -66,6 +66,7 @@ export interface Record {
 }
 
 export interface Session {
+  owner_key?: string | null;
   id: string;
   project_id: string;
   started_at: string;

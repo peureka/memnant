@@ -8,6 +8,7 @@
  * Story 8.4: Stale session cleanup.
  */
 
+import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { VERSION } from '../version.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -24,10 +25,11 @@ import type { ProjectConfig, RecordType } from '../types.js';
 import { loadConfig, ConfigError, findProjectRoot } from '../config/load.js';
 import { compileContext } from '../context/compile.js';
 import { resolveChoreographyOptions } from '../context/choreography.js';
-import { getActiveSession, closeSession, getSessionRecordCounts } from '../ledger/sessions.js';
+import { lastSessionClosedAutomatically, getActiveSession, closeSession, getSessionRecordCounts } from '../ledger/sessions.js';
 import { checkCopy } from '../governor/copy-check.js';
 import { checkDesign } from '../governor/design-check.js';
 import {
+  activeSessionReceipt,
   ensureActiveSession,
   startAutoCloseTimer,
   stopAutoCloseTimer,
@@ -156,10 +158,12 @@ export async function startServer(): Promise<void> {
     return;
   }
 
-  const db = openDatabase(dbPath);
+  const sessionOwner = process.env.MEMNANT_SESSION_OWNER?.trim() || `mcp:${randomUUID()}`;
+  const db = openDatabase(dbPath, sessionOwner);
 
   // Session manager state for idle tracking
   const sessionState: SessionManagerState = {
+    owner: sessionOwner,
     lastToolCallAt: Date.now(),
     intervalHandle: null,
   };
@@ -308,7 +312,7 @@ export async function startServer(): Promise<void> {
       const responseText = JSON.stringify(jsonOutput, null, 2);
 
       // Record context event
-      const activeForReplay = getActiveSession(db, config.project.id);
+      const activeForReplay = getActiveSession(db, config.project.id, sessionOwner);
       recordContextEvent(db, {
         sessionId: activeForReplay?.id ?? null,
         toolName: 'recall',
@@ -360,7 +364,7 @@ export async function startServer(): Promise<void> {
   server.registerTool(
     'memnant_log',
     {
-      description: 'Write a record to the memnant ledger. Auto-starts a session if none is active.',
+      description: 'Returns session_id, session_started, and session_owner. Set MEMNANT_SESSION_OWNER to that handle to resume after a restart. Write a record to the memnant ledger. Auto-starts a session if none is active.',
       inputSchema: {
         type: z.string().describe('Record type (session_log, decision, framework_fix, spec_snapshot, codebase_snapshot, orchestrator_task)'),
         content: z.string().describe('Record content text'),
@@ -415,7 +419,7 @@ export async function startServer(): Promise<void> {
       }
 
       // Auto-start session if none active (Story 8.1)
-      const activeSession = ensureActiveSession(db, config.project.id);
+      const { session: activeSession, started } = activeSessionReceipt(db, config.project.id);
 
       // Shared integrity write: embedding, auto-link, supersession,
       // best-effort contradiction detection (write-path parity).
@@ -477,6 +481,9 @@ export async function startServer(): Promise<void> {
           type: 'text' as const,
           text: JSON.stringify({
             id: record.id,
+            session_id: activeSession.id,
+            session_started: started,
+            session_owner: sessionOwner,
             type: record.type,
             created_at: record.created_at,
             ...(record.ast_hash ? { ast_anchored: true, target_file: record.target_file, target_symbol: record.target_symbol } : {}),
@@ -537,6 +544,7 @@ export async function startServer(): Promise<void> {
     },
     async ({ epic, include_specs, include_personas }) => {
       await onToolCall();
+      ensureActiveSession(db, config.project.id, sessionOwner);
       log(`memnant_session_context epic="${epic ?? 'none'}"`);
 
       // Auto-harvest previous session's transcript
@@ -652,7 +660,7 @@ export async function startServer(): Promise<void> {
       // Stigmergy: surface cross-builder updates and contradictions for active files
       try {
         if (config.project.builder) {
-          const activeSessionForStigmergy = getActiveSession(db, config.project.id);
+          const activeSessionForStigmergy = getActiveSession(db, config.project.id, sessionOwner);
           if (activeSessionForStigmergy) {
             const { findNewTeamRecordsForActiveFiles, formatTeamUpdates, findActiveContradictions } = await import('../team/stigmergy.js');
             const teamUpdates = findNewTeamRecordsForActiveFiles(db, activeSessionForStigmergy.id, config.project.builder);
@@ -730,9 +738,6 @@ export async function startServer(): Promise<void> {
         // Workspace context is best-effort
       }
 
-      // Auto-start session if none active (Story 8.1)
-      ensureActiveSession(db, config.project.id);
-
       // Render narrative briefing
       const { getLastClosedSession } = await import('../ledger/sessions.js');
       const { daysSinceLastSession } = await import('../context/compile.js');
@@ -766,7 +771,7 @@ export async function startServer(): Promise<void> {
 
       const responseText = JSON.stringify(response, null, 2);
 
-      const activeForReplay = getActiveSession(db, config.project.id);
+      const activeForReplay = getActiveSession(db, config.project.id, sessionOwner);
       recordContextEvent(db, {
         sessionId: activeForReplay?.id ?? null,
         toolName: 'session_context',
@@ -906,7 +911,7 @@ export async function startServer(): Promise<void> {
 
         const responseText = JSON.stringify(result, null, 2);
 
-        const activeForReplay = getActiveSession(db, config.project.id);
+        const activeForReplay = getActiveSession(db, config.project.id, sessionOwner);
         recordContextEvent(db, {
           sessionId: activeForReplay?.id ?? null,
           toolName: 'context_for_file',
@@ -954,7 +959,7 @@ export async function startServer(): Promise<void> {
         text = formatBriefAsMarkdown(brief);
       }
 
-      const activeForReplay = getActiveSession(db, config.project.id);
+      const activeForReplay = getActiveSession(db, config.project.id, sessionOwner);
       recordContextEvent(db, {
         sessionId: activeForReplay?.id ?? null,
         toolName: 'project_brief',
@@ -1156,7 +1161,7 @@ export async function startServer(): Promise<void> {
         }
         sessionId = row.id;
       } else {
-        const active = getActiveSession(db, config.project.id);
+        const active = getActiveSession(db, config.project.id, sessionOwner);
         if (!active) {
           return {
             content: [{ type: 'text' as const, text: 'No active session. Provide session_id to evaluate a specific session.' }],
@@ -1328,7 +1333,7 @@ export async function startServer(): Promise<void> {
       log(`memnant_retract record="${record_id.slice(0, 8)}"`);
 
       try {
-        ensureActiveSession(db, config.project.id);
+        ensureActiveSession(db, config.project.id, sessionOwner);
         retractRecord(db, record_id, reason);
 
         return {
@@ -1363,7 +1368,7 @@ export async function startServer(): Promise<void> {
       // calls, so the session this summary belongs to may have closed underneath
       // us. Refusing would discard the agent's summary and leave the mechanical
       // auto-close stub as the only record of the work.
-      const active = ensureActiveSession(db, config.project.id);
+      const active = ensureActiveSession(db, config.project.id, sessionOwner);
 
       if (!summary.trim()) {
         return {
@@ -1418,17 +1423,21 @@ export async function startServer(): Promise<void> {
       await onToolCall();
       log('memnant_session_close');
 
-      // Same as session_log: an auto-close must not cost the agent its summary.
-      // Records are immutable, so the already-closed session's stub log cannot be
-      // rewritten; a fresh session carries the real summary and closes with it.
-      const active = ensureActiveSession(db, config.project.id);
-
       if (!summary.trim()) {
         return {
           content: [{ type: 'text' as const, text: 'Summary cannot be empty. Describe what shipped, decisions made, and TODOs.' }],
           isError: true,
         };
       }
+
+      const existing = getActiveSession(db, config.project.id, sessionOwner);
+      if (!existing && !lastSessionClosedAutomatically(db, config.project.id, sessionOwner)) {
+        return {
+          content: [{ type: 'text' as const, text: 'No open session for this session owner. Start one with memnant_log or memnant_session_context, or resume with MEMNANT_SESSION_OWNER.' }],
+          isError: true,
+        };
+      }
+      const active = existing ?? ensureActiveSession(db, config.project.id, sessionOwner);
 
       // Generate embedding and insert session_log record
       const embedding = await generateEmbedding(summary);

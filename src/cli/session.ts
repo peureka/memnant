@@ -6,6 +6,7 @@
  * Story 2.4: session status.
  */
 
+import { cliSessionOwner } from '../config/load.js';
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -65,6 +66,14 @@ const SESSION_LOG_TEMPLATE = `## Shipped
 (what's next, what was deferred)
 `;
 
+export function announceSessionStart(session: { id: string; owner_key?: string | null }): void {
+  process.stderr.write(`Session ${session.id.slice(0, 8)} started.\n`);
+  if (session.owner_key) {
+    const env = JSON.stringify({ MEMNANT_SESSION_OWNER: session.owner_key });
+    process.stderr.write(`MCP handoff environment: ${env}\n`);
+  }
+}
+
 export function registerSessionCommand(program: Command): void {
   const session = program
     .command('session')
@@ -84,7 +93,7 @@ export function registerSessionCommand(program: Command): void {
       const { resolveChoreographyOptions } = await import('../context/choreography.js');
 
       const { config, dbPath, projectRoot } = await loadProjectConfig();
-      const db = openDatabase(dbPath);
+      const db = openDatabase(dbPath, cliSessionOwner(config, projectRoot));
 
       try {
         // Check for active session
@@ -127,7 +136,7 @@ export function registerSessionCommand(program: Command): void {
         if (!opts.dryRun) {
           const newSession = createSession(db, config.project.id, opts.epic);
           // Print session ID to stderr so it doesn't pollute the context output
-          process.stderr.write(`Session ${newSession.id.slice(0, 8)} started.\n`);
+          announceSessionStart(newSession);
         }
 
         // Output compiled context
@@ -142,20 +151,21 @@ export function registerSessionCommand(program: Command): void {
     .command('close')
     .description('Close the active session with a log')
     .option('--log <content>', 'Session log content (inline)')
+    .option('--legacy', 'Close a pre-upgrade session with no owner')
     .option('--skip <reason>', 'Close without a log (provide reason)')
-    .action(async (opts: { log?: string; skip?: string }) => {
+    .action(async (opts: { log?: string; skip?: string; legacy?: boolean }) => {
       const { openDatabase } = await import('../ledger/database.js');
       const { getActiveSession, closeSession, closeSessionSkipped, getSessionRecordCounts } = await import('../ledger/sessions.js');
       const { insertRecord } = await import('../ledger/records.js');
       const { generateEmbedding, serializeEmbedding } = await import('../vector/embeddings.js');
 
       const { config, dbPath, projectRoot } = await loadProjectConfig();
-      const db = openDatabase(dbPath);
+      const db = openDatabase(dbPath, opts.legacy ? null : cliSessionOwner(config, projectRoot));
 
       try {
         const active = getActiveSession(db, config.project.id);
         if (!active) {
-          console.log('No active session to close.');
+          console.log('No active session to close. Start with memnant session start, or use memnant session close --legacy to finish a pre-upgrade session.');
           return;
         }
 
@@ -246,8 +256,8 @@ export function registerSessionCommand(program: Command): void {
       const { openDatabase } = await import('../ledger/database.js');
       const { getActiveSession, getSessionRecordCounts } = await import('../ledger/sessions.js');
 
-      const { config, dbPath } = await loadProjectConfig();
-      const db = openDatabase(dbPath);
+      const { config, dbPath, projectRoot } = await loadProjectConfig();
+      const db = openDatabase(dbPath, cliSessionOwner(config, projectRoot));
 
       try {
         const active = getActiveSession(db, config.project.id);

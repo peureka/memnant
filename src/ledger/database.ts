@@ -12,10 +12,11 @@
 import pkg from 'node-sqlite3-wasm';
 import { mkdirSync, copyFileSync } from 'fs';
 import { dirname } from 'path';
-import { MIGRATIONS } from './migrations.js';
+import { MIGRATIONS, OPEN_SESSION_OWNER_INDEX } from './migrations.js';
 
 export const Database = pkg.Database;
-export type Database = InstanceType<typeof Database>;
+// Each client opens its own connection. Nested readers inherit that client's scope.
+export type Database = InstanceType<typeof Database> & { readonly sessionOwner?: string | null };
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS project (
@@ -61,7 +62,8 @@ CREATE TABLE IF NOT EXISTS session (
   epic TEXT,
   stories_completed TEXT NOT NULL DEFAULT '[]',
   log_record_id TEXT REFERENCES record(id),
-  log_skipped TEXT
+  log_skipped TEXT,
+  owner_key TEXT
 );
 
 CREATE TABLE IF NOT EXISTS record_relationship (
@@ -236,6 +238,7 @@ function migrateSchema(db: Database, dbPath: string): void {
 }
 
 const INDEXES = `
+${OPEN_SESSION_OWNER_INDEX};
 CREATE INDEX IF NOT EXISTS idx_record_type ON record(type);
 CREATE INDEX IF NOT EXISTS idx_record_project_id ON record(project_id);
 CREATE INDEX IF NOT EXISTS idx_record_access_record_id ON record_access(record_id);
@@ -297,8 +300,10 @@ export function createDatabase(dbPath: string): Database {
   return db;
 }
 
-export function openDatabase(dbPath: string): Database {
-  const db = new Database(dbPath);
+export function openDatabase(dbPath: string, sessionOwner: string | null = null): Database {
+  const db = Object.assign(new Database(dbPath), { sessionOwner });
+  // Another MCP process can briefly own the writer lock during startup or a log.
+  db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA journal_mode = WAL');
   migrateSchema(db, dbPath);
   return db;

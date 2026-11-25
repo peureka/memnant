@@ -9,13 +9,14 @@
  * See docs/PLAN.md, Story 1.4 for the full AC.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { execFileSync, spawn, type ChildProcess } from 'child_process';
+import { openDatabase } from '../src/ledger/database.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const CLI_PATH = join(import.meta.dirname, '..', 'dist', 'cli', 'index.js');
 const SERVER_PATH = join(import.meta.dirname, '..', 'dist', 'mcp', 'server.js');
@@ -43,11 +44,12 @@ function runMemnant(
   }
 }
 
-async function createClient(cwd: string): Promise<{ client: Client; transport: StdioClientTransport }> {
+async function createClient(cwd: string, owner?: string): Promise<{ client: Client; transport: StdioClientTransport }> {
   const transport = new StdioClientTransport({
     command: 'node',
     args: [CLI_PATH, 'serve'],
     cwd,
+    ...(owner ? { env: { ...getDefaultEnvironment(), MEMNANT_SESSION_OWNER: owner } } : {}),
   });
 
   const client = new Client({
@@ -349,7 +351,7 @@ describe('memnant serve (MCP server)', { timeout: 120_000 }, () => {
   // Story 6.5: memnant_session_close closes active session
   it('memnant_session_close closes active session with summary', async () => {
     // Start a session first via CLI
-    runMemnant(['session', 'start'], testDir, { timeout: 120_000 });
+    await client.callTool({ name: 'memnant_session_context', arguments: {} });
 
     const result = await client.callTool({
       name: 'memnant_session_close',
@@ -729,5 +731,111 @@ describe('memnant serve (MCP server)', { timeout: 120_000 }, () => {
 
     // Close should not throw
     await freshClient.close();
+  });
+});
+
+describe('MCP session ownership', { timeout: 120_000 }, () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = await mkdtemp(join(tmpdir(), 'memnant-mcp-owner-'));
+    expect(runMemnant(['init'], testDir).status).toBe(0);
+  });
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  it('attributes the first context event and first codebase snapshot to the requesting session', async () => {
+    const first = await createClient(testDir);
+    try {
+      const result = await first.client.callTool({ name: 'memnant_session_context', arguments: {} });
+      expect(result.isError).toBeFalsy();
+      const db = openDatabase(join(testDir, '.memnant', 'ledger.db'));
+      try {
+        const active = db.get('SELECT id FROM session WHERE closed_at IS NULL');
+        expect(active?.id).toEqual(expect.any(String));
+        expect(db.get("SELECT session_id FROM context_event WHERE tool_name = 'session_context'")?.session_id).toBe(active?.id);
+        expect(db.get("SELECT source_session FROM record WHERE type = 'codebase_snapshot'")?.source_session).toBe(active?.id);
+      } finally { db.close(); }
+    } finally { await first.client.close(); }
+  });
+
+  it('preserves the returning owner’s summary after the timer has automatically closed its session', async () => {
+    const fresh = await createClient(testDir);
+    try {
+      const log = await fresh.client.callTool({ name: 'memnant_log', arguments: { type: 'decision', content: 'Review the proof.' } });
+      const receipt = JSON.parse((log.content as Array<{ text: string }>)[0].text);
+      const db = openDatabase(join(testDir, '.memnant', 'ledger.db'));
+      try {
+        db.run("UPDATE session SET started_at = '2000-01-01' WHERE id = ?", [receipt.session_id]);
+        const close = await fresh.client.callTool({ name: 'memnant_session_close', arguments: { summary: 'Recovered proof review.' } });
+        expect(close.isError).toBeFalsy();
+        const rows = db.all(
+          'SELECT s.id, r.content_text AS summary FROM session s JOIN record r ON r.id = s.log_record_id WHERE s.owner_key = ? ORDER BY s.rowid',
+          [receipt.session_owner],
+        );
+        expect(rows).toHaveLength(2);
+        expect(rows[0].id).toBe(receipt.session_id);
+        expect(rows[0].summary).toContain('Auto-closed session');
+        expect(rows[1].summary).toBe('Recovered proof review.');
+      } finally { db.close(); }
+    } finally { await fresh.client.close(); }
+  });
+
+  it('declines a close from a new client without creating an empty session', async () => {
+    const fresh = await createClient(testDir);
+    try {
+      const result = await fresh.client.callTool({ name: 'memnant_session_close', arguments: { summary: 'Review complete.' } });
+      expect(result.isError).toBe(true);
+      expect((result.content as Array<{ text: string }>)[0].text).toContain('session owner');
+    } finally { await fresh.client.close(); }
+  });
+
+  it('resumes its open MCP session after reconnecting with the returned owner handle', async () => {
+    const original = await createClient(testDir);
+    const args = { name: 'memnant_log', arguments: { type: 'decision', content: 'Review the latest copy.' } };
+    let receipt;
+    try {
+      const result = await original.client.callTool(args);
+      receipt = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+      expect(receipt.session_owner).toEqual(expect.any(String));
+    } finally { await original.client.close(); }
+    const resumed = await createClient(testDir, receipt.session_owner);
+    try {
+      const result = await resumed.client.callTool(args);
+      const next = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+      expect(next.session_id).toBe(receipt.session_id);
+      expect(next.session_started).toBe(false);
+    } finally { await resumed.client.close(); }
+  });
+
+  it('reports and preserves independent sessions for two MCP clients on one project', async () => {
+    const a = await createClient(testDir);
+    const b = await createClient(testDir);
+    async function log(c: Client, content: string) {
+      const result = await c.callTool({ name: 'memnant_log', arguments: { type: 'decision', content } });
+      expect(result.isError).toBeFalsy();
+      return JSON.parse((result.content as Array<{ text: string }>)[0].text);
+    }
+
+    try {
+      const first = await log(a.client, 'Review the first draft before signoff.');
+      const second = await log(b.client, 'Check the second draft for formatting.');
+      expect(first.session_started).toBe(true);
+      expect(second.session_started).toBe(true);
+      expect(first.session_id).toEqual(expect.any(String));
+      expect(second.session_id).not.toBe(first.session_id);
+
+      const closed = await a.client.callTool({ name: 'memnant_session_close', arguments: { summary: 'First review complete.' } });
+      expect(closed.isError).toBeFalsy();
+      const after = await log(b.client, 'Verify the final proof.');
+      expect(after.session_started).toBe(false);
+      expect(after.session_id).toBe(second.session_id);
+      const otherClosed = await b.client.callTool({ name: 'memnant_session_close', arguments: { summary: 'Second review complete.' } });
+      expect(otherClosed.isError).toBeFalsy();
+    } finally {
+      await a.client.close();
+      await b.client.close();
+    }
   });
 });

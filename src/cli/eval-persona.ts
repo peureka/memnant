@@ -5,6 +5,7 @@
  * Requires ANTHROPIC_API_KEY or OPENAI_API_KEY.
  */
 
+import { cliSessionOwner } from '../config/load.js';
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -66,7 +67,7 @@ export function registerEvalPersonaCommand(program: Command): void {
         process.exit(1);
       }
 
-      const db = openDatabase(dbPath);
+      const db = openDatabase(dbPath, cliSessionOwner(config, projectRoot));
 
       try {
         // Find session

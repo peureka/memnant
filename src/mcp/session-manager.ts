@@ -17,6 +17,7 @@ const DEFAULT_AUTO_CLOSE_MINUTES = 60;
 const DEFAULT_MAX_DURATION_HOURS = 8;
 
 export interface SessionManagerState {
+  owner?: string;
   lastToolCallAt: number;
   intervalHandle: ReturnType<typeof setInterval> | null;
 }
@@ -28,10 +29,27 @@ export interface SessionManagerState {
 export function ensureActiveSession(
   db: Database,
   projectId: string,
+  owner: string | null = db.sessionOwner ?? null,
 ): Session {
-  const active = getActiveSession(db, projectId);
-  if (active) return active;
-  return createSession(db, projectId);
+  return activeSessionReceipt(db, projectId, owner).session;
+}
+
+/** Serialize competing starts so the receipt identifies the caller that created the row. */
+export function activeSessionReceipt(
+  db: Database,
+  projectId: string,
+  owner: string | null = db.sessionOwner ?? null,
+): { session: Session; started: boolean } {
+  db.run('BEGIN IMMEDIATE');
+  try {
+    const active = getActiveSession(db, projectId, owner);
+    const session = active ?? createSession(db, projectId, undefined, owner);
+    db.run('COMMIT');
+    return { session, started: active === null };
+  } catch (error) {
+    db.run('ROLLBACK');
+    throw error;
+  }
 }
 
 /**
@@ -43,7 +61,7 @@ export async function autoCloseIdleSession(
   config: ProjectConfig,
   state: SessionManagerState,
 ): Promise<boolean> {
-  const active = getActiveSession(db, config.project.id);
+  const active = getActiveSession(db, config.project.id, state.owner);
   if (!active) return false;
 
   const autoCloseMinutes = config.session?.auto_close_minutes ?? DEFAULT_AUTO_CLOSE_MINUTES;
@@ -63,8 +81,9 @@ export async function autoCloseIdleSession(
 export async function autoCloseStaleSession(
   db: Database,
   config: ProjectConfig,
+  owner: string | null = null,
 ): Promise<boolean> {
-  const active = getActiveSession(db, config.project.id);
+  const active = getActiveSession(db, config.project.id, owner);
   if (!active) return false;
 
   const maxDurationHours = config.session?.max_duration_hours ?? DEFAULT_MAX_DURATION_HOURS;
@@ -142,7 +161,7 @@ export async function runAutoCloseChecks(
   state: SessionManagerState,
 ): Promise<void> {
   // Check stale first (longer duration takes priority)
-  const closedStale = await autoCloseStaleSession(db, config);
+  const closedStale = await autoCloseStaleSession(db, config, state.owner);
   if (closedStale) {
     process.stderr.write(`[${new Date().toISOString()}] Auto-closed stale session (max duration exceeded)\n`);
     return;

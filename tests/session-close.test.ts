@@ -23,10 +23,11 @@ const CLI_PATH = join(import.meta.dirname, '..', 'dist', 'cli', 'index.js');
 function runMemnant(
   args: string[],
   cwd: string,
-  opts?: { input?: string; timeout?: number },
+  opts?: { input?: string; timeout?: number; owner?: string },
 ): { stdout: string; stderr: string; status: number } {
   const result = spawnSync('node', [CLI_PATH, ...args], {
     cwd,
+    env: { ...process.env, MEMNANT_SESSION_OWNER: opts?.owner ?? '' },
     encoding: 'utf-8',
     timeout: opts?.timeout ?? 120_000,
     input: opts?.input,
@@ -60,6 +61,22 @@ describe('memnant session close', { timeout: 120_000 }, () => {
 
   afterAll(async () => {
     await rm(testDir, { recursive: true, force: true });
+  });
+
+  it('can finish a legacy session explicitly while a named CLI session remains open', () => {
+    const fixture = openDb(testDir);
+    fixture.run("INSERT INTO session (id, project_id, started_at) SELECT 'pre-upgrade', id, '2026-01-01' FROM project");
+    fixture.close();
+    const owner = { owner: 'proof-review' };
+    expect(runMemnant(['session', 'start'], testDir, owner).status).toBe(0);
+    const result = runMemnant(['session', 'close', '--legacy', '--skip', 'legacy review complete'], testDir, owner);
+    expect(result.status).toBe(0);
+    const db = openDb(testDir);
+    try {
+      expect(db.get('SELECT COUNT(*) AS n FROM session WHERE closed_at IS NULL')).toEqual({ n: 1 });
+      expect(runMemnant(['session', 'close', '--skip', 'new review complete'], testDir, owner).status).toBe(0);
+      expect(db.get('SELECT COUNT(*) AS n FROM session WHERE closed_at IS NULL')).toEqual({ n: 0 });
+    } finally { db.close(); }
   });
 
   // AC 1: session close --log closes session and creates session_log record
@@ -158,6 +175,8 @@ describe('memnant session close', { timeout: 120_000 }, () => {
     const result = runMemnant(['session', 'close'], testDir, { input: '' });
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('No active session to close.');
+    expect(result.stdout).toContain('memnant session start');
+    expect(result.stdout).toContain('--legacy');
   });
 
   // AC 6: Close prints summary with duration and record counts

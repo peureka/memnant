@@ -18,6 +18,7 @@ const EMBEDDING_DIMENSIONS = 384;
 interface SessionRow {
   id: string;
   project_id: string;
+  owner_key: string | null;
   started_at: string;
   closed_at: string | null;
   epic: string | null;
@@ -33,19 +34,20 @@ function rowToSession(row: SessionRow): Session {
   };
 }
 
-export function createSession(db: Database, projectId: string, epic?: string): Session {
+export function createSession(db: Database, projectId: string, epic?: string, owner: string | null = db.sessionOwner ?? null): Session {
   const id = uuidv4();
   const startedAt = new Date().toISOString();
 
   db.run(
-    `INSERT INTO session (id, project_id, started_at, epic, stories_completed)
-     VALUES (?, ?, ?, ?, '[]')`,
-    [id, projectId, startedAt, epic ?? null],
+    `INSERT INTO session (id, project_id, started_at, epic, stories_completed, owner_key)
+     VALUES (?, ?, ?, ?, '[]', ?)`,
+    [id, projectId, startedAt, epic ?? null, owner],
   );
 
   return {
     id,
     project_id: projectId,
+    owner_key: owner,
     started_at: startedAt,
     closed_at: null,
     epic: epic ?? null,
@@ -55,13 +57,25 @@ export function createSession(db: Database, projectId: string, epic?: string): S
   };
 }
 
-export function getActiveSession(db: Database, projectId: string): Session | null {
+export function getActiveSession(db: Database, projectId: string, owner: string | null = db.sessionOwner ?? null): Session | null {
   const row = db.get(
-    'SELECT * FROM session WHERE project_id = ? AND closed_at IS NULL ORDER BY started_at DESC LIMIT 1',
-    [projectId],
+    'SELECT * FROM session WHERE project_id = ? AND owner_key IS ? AND closed_at IS NULL ORDER BY started_at DESC LIMIT 1',
+    [projectId, owner],
   ) as unknown as SessionRow | undefined;
 
   return row ? rowToSession(row) : null;
+}
+
+/** Only an automatic close may be followed by a recovery summary for this caller. */
+export function lastSessionClosedAutomatically(db: Database, projectId: string, owner: string): boolean {
+  const row = db.get(
+    `SELECT EXISTS(SELECT 1 FROM json_each(r.tags) WHERE value = 'auto-closed') AS automatic
+     FROM session s LEFT JOIN record r ON r.id = s.log_record_id
+     WHERE s.project_id = ? AND s.owner_key = ? AND s.closed_at IS NOT NULL
+     ORDER BY s.closed_at DESC, s.rowid DESC LIMIT 1`,
+    [projectId, owner],
+  ) as { automatic: number } | undefined;
+  return row?.automatic === 1;
 }
 
 export function getLastClosedSession(db: Database): Session | null {

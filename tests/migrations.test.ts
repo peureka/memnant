@@ -12,7 +12,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { existsSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createDatabase, openDatabase, CURRENT_SCHEMA_VERSION, type Database } from '../src/ledger/database.js';
+import { createDatabase, openDatabase, migrateDown, CURRENT_SCHEMA_VERSION, type Database } from '../src/ledger/database.js';
 
 describe('Migration Registry', () => {
   let testDir: string;
@@ -23,6 +23,28 @@ describe('Migration Registry', () => {
 
   afterEach(async () => {
     await rm(testDir, { recursive: true, force: true });
+  });
+
+  it('upgrades and rolls back an existing unowned session without changing its identity', () => {
+    const path = join(testDir, 'v13.db');
+    const original = createDatabase(path);
+    original.run('DROP INDEX IF EXISTS idx_session_open_owner');
+    original.run('ALTER TABLE session DROP COLUMN owner_key');
+    original.run('DELETE FROM schema_version');
+    original.run('INSERT INTO schema_version VALUES (13)');
+    original.run("INSERT INTO project (id, name, root_path, created_at) VALUES ('p', 'p', '/', '2026-01-01')");
+    original.run("INSERT INTO session (id, project_id, started_at) VALUES ('legacy', 'p', '2026-01-01')");
+    original.close();
+
+    const upgraded = openDatabase(path);
+    try {
+      expect(upgraded.get('SELECT id, owner_key FROM session')).toEqual({ id: 'legacy', owner_key: null });
+      migrateDown(upgraded, 13);
+      expect(upgraded.get('SELECT id FROM session')).toEqual({ id: 'legacy' });
+      expect(upgraded.all('PRAGMA table_info(session)').some(c => c.name === 'owner_key')).toBe(false);
+    } finally {
+      upgraded.close();
+    }
   });
 
   it('creates auto-backup before migrating a v2 database', () => {
